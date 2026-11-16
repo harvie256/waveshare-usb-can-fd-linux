@@ -141,7 +141,7 @@ Not tested yet: several adapters at once.
 
 ## Documentation
 
-**[docs/index.html](docs/index.html)** has the full illustrated reference: hardware, USB protocol and wire formats,
+**[Online documentation](https://harvie256.github.io/waveshare-usb-can-fd-linux/)** ([`docs/index.html`](docs/index.html)) has the full illustrated reference: hardware, USB protocol and wire formats,
 firmware behaviour, both drivers' internals, and the test rig and results.
 
 ## Repository layout
