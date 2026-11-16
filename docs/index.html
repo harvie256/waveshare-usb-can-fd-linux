@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wscanfd: Linux driver for the Waveshare USB-CAN-FD</title>
+<style>
+:root {
+  --fg: #1c2230; --muted: #555f6e; --bg: #ffffff; --side: #f5f6f8; --border: #d8dce2;
+  --accent: #0a58a8; --accent-soft: #e8f0fa; --code: #f2f3f5; --warn: #fff6e0; --warn-b: #d99a00;
+  --danger: #fdecec; --danger-b: #c0392b; --ok: #e9f6ec; --ok-b: #2e8b47; --wip: #f2ecfb; --wip-b: #7a52b3;
+  --mono: ui-monospace, "SFMono-Regular", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 12px; }
+body { margin: 0; color: var(--fg); background: var(--bg);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); min-height: 100vh; }
+nav.toc { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--side);
+  border-right: 1px solid var(--border); padding: 20px 16px 40px; font-size: 14px; }
+nav.toc .brand { font-weight: 700; font-size: 17px; margin-bottom: 2px; }
+nav.toc .tag { color: var(--muted); font-size: 12.5px; margin-bottom: 16px; }
+nav.toc ol { list-style: none; margin: 0; padding: 0; }
+nav.toc ol ol { padding-left: 14px; margin: 2px 0 6px; }
+nav.toc a { display: block; padding: 2px 6px; border-radius: 4px; color: var(--fg); text-decoration: none; }
+nav.toc a:hover { background: var(--accent-soft); color: var(--accent); }
+nav.toc > ol > li > a { font-weight: 600; margin-top: 6px; }
+main { padding: 28px 48px 80px; max-width: 980px; }
+h1 { font-size: 30px; line-height: 1.25; margin: 0 0 6px; }
+h2 { font-size: 24px; margin: 56px 0 12px; padding-top: 10px; border-top: 2px solid var(--border); }
+h3 { font-size: 19px; margin: 34px 0 8px; }
+h4 { font-size: 16px; margin: 22px 0 6px; }
+p, ul, ol { margin: 10px 0; }
+a { color: var(--accent); }
+code, kbd, .mono { font-family: var(--mono); font-size: 0.9em; }
+code { background: var(--code); padding: 1px 4px; border-radius: 3px; }
+pre { background: var(--code); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px;
+  overflow-x: auto; font: 13.5px/1.5 var(--mono); }
+pre code { background: none; padding: 0; font-size: inherit; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0 18px; font-size: 14.5px; }
+th, td { border: 1px solid var(--border); padding: 6px 9px; text-align: left; vertical-align: top; }
+th { background: var(--side); font-weight: 600; }
+td.n, th.n { white-space: nowrap; font-family: var(--mono); font-size: 13.5px; }
+.tablewrap { overflow-x: auto; }
+figure { margin: 18px 0 26px; }
+figure svg, figure img { display: block; width: 100%; height: auto; border: 1px solid var(--border);
+  border-radius: 6px; background: #fff; }
+figcaption { color: var(--muted); font-size: 14px; margin-top: 6px; }
+.lead { font-size: 18px; color: #2b3242; }
+.note, .warn, .danger, .wipbox, .okbox { border-left: 4px solid; border-radius: 4px; padding: 10px 14px; margin: 14px 0; }
+.note { background: var(--accent-soft); border-color: var(--accent); }
+.warn { background: var(--warn); border-color: var(--warn-b); }
+.danger { background: var(--danger); border-color: var(--danger-b); }
+.wipbox { background: var(--wip); border-color: var(--wip-b); }
+.okbox { background: var(--ok); border-color: var(--ok-b); }
+.note > :first-child, .warn > :first-child, .danger > :first-child, .wipbox > :first-child, .okbox > :first-child { margin-top: 0; }
+.note > :last-child, .warn > :last-child, .danger > :last-child, .wipbox > :last-child, .okbox > :last-child { margin-bottom: 0; }
+.badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 10px;
+  vertical-align: middle; white-space: nowrap; }
+.b-ok { background: var(--ok); color: #1d6b34; border: 1px solid #9fd3ad; }
+.b-part { background: var(--warn); color: #7a5600; border: 1px solid #ecc96b; }
+.b-wip { background: var(--wip); color: #5b3a8f; border: 1px solid #c8b3e8; }
+.b-no { background: var(--danger); color: #922; border: 1px solid #e3a5a5; }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 12px 0; }
+dl.kv dt { font-weight: 600; } dl.kv dd { margin: 0; }
+ol.legend { columns: 2; column-gap: 28px; font-size: 14.5px; padding-left: 26px; }
+ol.legend li { break-inside: avoid; margin-bottom: 4px; }
+.hex { font-family: var(--mono); font-size: 13px; word-break: break-all; }
+/* diagrams */
+.dg { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; font-size: 13px; }
+.dg text { fill: #1c2230; }
+.dg .c { text-anchor: middle; } .dg .e { text-anchor: end; }
+.dg .h { font-weight: 700; }
+.dg .s { font-size: 11.5px; fill: #444d5c; }
+.dg .xs { font-size: 10px; fill: #5a6372; }
+.dg .m { font-family: var(--mono); font-size: 12px; }
+.dg .ms { font-family: var(--mono); font-size: 11px; }
+.dg .bx { fill: #edf3fb; stroke: #3a6ea5; stroke-width: 1.3; }
+.dg .dev { fill: #fdf3e5; stroke: #c27a1a; stroke-width: 1.3; }
+.dg .phy { fill: #ebf6ec; stroke: #3d8b3d; stroke-width: 1.3; }
+.dg .krn { fill: #f2ecfb; stroke: #7a52b3; stroke-width: 1.3; }
+.dg .neu { fill: #f4f5f7; stroke: #8a929e; stroke-width: 1.3; }
+.dg .fld { fill: #ffffff; stroke: #4a5566; stroke-width: 1.1; }
+.dg .fhd { fill: #e6eef8; stroke: #4a5566; stroke-width: 1.1; }
+.dg .fpl { fill: #fff8e8; stroke: #4a5566; stroke-width: 1.1; }
+.dg .fz { fill: #f1f2f4; stroke: #4a5566; stroke-width: 1.1; }
+.dg .ln { stroke: #3b4350; stroke-width: 1.4; fill: none; }
+.dg .lnb { stroke: #0a58a8; stroke-width: 1.4; fill: none; }
+.dg .lng { stroke: #2e7d32; stroke-width: 1.4; fill: none; }
+.dg .dash { stroke-dasharray: 6 4; }
+.dg .dot { stroke-dasharray: 2 3; }
+.dg .life { stroke: #9aa2ae; stroke-width: 1; stroke-dasharray: 4 4; }
+.dg .frame { fill: none; stroke: #8a929e; stroke-width: 1; stroke-dasharray: 5 3; }
+.dg .sp { stroke: #c0392b; stroke-width: 2; }
+.dg .red { fill: #c0392b; }
+@media (max-width: 900px) {
+  .layout { display: block; }
+  nav.toc { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  main { padding: 20px 18px 60px; }
+  ol.legend { columns: 1; }
+}
+@media print { nav.toc { display: none; } .layout { display: block; } main { max-width: none; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav class="toc" aria-label="Contents">
+  <div class="brand">wscanfd</div>
+  <div class="tag">Open Linux driver for the Waveshare USB-CAN-FD (SKU 25029, 04d8:0053)</div>
+  <ol>
+    <li><a href="#overview">1. Overview &amp; status</a>
+      <ol><li><a href="#status">Status table</a></li><li><a href="#quickstart">Quick start</a></li><li><a href="#architecture">Architecture</a></li></ol></li>
+    <li><a href="#hardware">2. Hardware</a></li>
+    <li><a href="#protocol">3. Protocol reference</a>
+      <ol>
+        <li><a href="#p-endpoints">Endpoints</a></li>
+        <li><a href="#p-framing">Framing &amp; checksum</a></li>
+        <li><a href="#p-commands">Command table</a></li>
+        <li><a href="#p-sequence">Session sequence</a></li>
+        <li><a href="#p-auth">0x8001 Open handshake</a></li>
+        <li><a href="#p-info">0x8005 Device info</a></li>
+        <li><a href="#p-init">0x8002 InitCAN</a></li>
+        <li><a href="#p-timing">Bit-timing words</a></li>
+        <li><a href="#p-small">Filter, Start, Reset, Close</a></li>
+        <li><a href="#p-tx">0x8004 Transmit</a></li>
+        <li><a href="#p-rx">RX records</a></li>
+        <li><a href="#p-status">0x800D Status</a></li>
+        <li><a href="#p-danger">Unused &amp; dangerous commands</a></li>
+      </ol></li>
+    <li><a href="#quirks">4. Firmware behaviour &amp; limitations</a></li>
+    <li><a href="#userspace">5. Userspace driver</a>
+      <ol><li><a href="#u-install">Install</a></li><li><a href="#u-cli">CLI</a></li><li><a href="#u-bridge">SocketCAN bridge</a></li><li><a href="#u-api">Python API</a></li></ol></li>
+    <li><a href="#kernel">6. Kernel driver</a>
+      <ol><li><a href="#k-usage">Build, install &amp; use</a></li><li><a href="#k-recommended">Recommended settings</a></li><li><a href="#k-design">Design</a></li><li><a href="#k-txpacing">TX pacing</a></li><li><a href="#k-internals">URB flow</a></li><li><a href="#k-timing">Bit-timing limits</a></li></ol></li>
+    <li><a href="#testing">7. Test rig &amp; results</a>
+      <ol><li><a href="#t-rig">Bench rig</a></li><li><a href="#t-results">Results</a></li><li><a href="#t-cangaroo">CANgaroo</a></li><li><a href="#t-errors">Error behaviour</a></li></ol></li>
+    <li><a href="#appendix">8. Appendix: repository map</a></li>
+  </ol>
+</nav>
+
+<main>
+<h1>wscanfd: an open Linux driver for the Waveshare USB-CAN-FD</h1>
+<p class="lead">The Waveshare USB-CAN-FD (non-B model, SKU 25029, USB ID <code>04d8:0053</code>) is a two-channel, isolated CAN FD adapter. The vendor supports this model on Windows only. This project provides a native SocketCAN kernel module (<code>wscanfd.ko</code>) and a Python/libusb userspace driver with a SocketCAN bridge.</p>
+
+<!-- ============================================================ 1 -->
+<h2 id="overview">1. Overview &amp; status</h2>
+<p>The adapter has an NXP LPC54616 microcontroller with two on-chip MCAN CAN FD controllers. It is a vendor-specific USB device with plain bulk endpoints, so it can be driven by a kernel driver or from userspace through libusb.</p>
+<ul>
+  <li><strong>Userspace driver (<code>wscanfd/</code>)</strong>: Python + pyusb. CLI (<code>info</code>, <code>dump</code>, <code>send</code>, <code>bridge</code>), a Python API, and a bridge to a <code>vcan</code> interface so that standard SocketCAN tools work. Tested on hardware.</li>
+  <li><strong>Kernel driver (<code>kernel/</code>)</strong>: an out-of-tree SocketCAN module, <code>wscanfd.ko</code> (DKMS-ready). It creates <code>can0</code>/<code>can1</code>, is configured with <code>ip link</code>, and paces TX to work around the firmware's missing flow control. Tested on hardware. <a href="#kernel">Section 6.</a></li>
+</ul>
+
+<h3 id="status">Status</h3>
+<p>Tested against a LilyGo T-2CAN-FD running the project's <code>t2can-echo/</code> firmware (MCP2518FD port for CAN FD, ESP32 TWAI for classic CAN). See <a href="#testing">section 7</a>.</p>
+<div class="tablewrap"><table>
+<tr><th>Feature</th><th>State</th><th>Notes</th></tr>
+<tr><td>Open handshake, device info</td><td><span class="badge b-ok">working</span></td><td></td></tr>
+<tr><td>Classic CAN TX/RX: std + ext IDs, 0-8 bytes, RTR TX</td><td><span class="badge b-ok">working</span></td><td></td></tr>
+<tr><td>CAN FD TX/RX: all lengths 0-64, with and without BRS, std + ext</td><td><span class="badge b-ok">working</span></td><td><code>tools/fd_roundtrip.py</code>, 82/82 cases</td></tr>
+<tr><td>Bitrates (nominal/data)</td><td><span class="badge b-ok">working</span></td><td>50k/1M, 100k/500k, 125k/1M, 200k/2M, 250k/2M, 250k/2.5M, 500k/2M, 500k/4M, 500k/5M, 800k/4M, 1M/4M, 1M/5M all pass. 200k uses a computed timing word</td></tr>
+<tr><td>Listen-only mode</td><td><span class="badge b-ok">working</span></td><td>InitCAN mode byte = 1</td></tr>
+<tr><td>Throughput</td><td><span class="badge b-ok">working</span></td><td>Kernel: 2000-frame bursts with zero loss up to 1M/5M, 1878 frames/s sustained at 250k. Firmware ceiling about 3300 short frames/s</td></tr>
+<tr><td>SocketCAN bridge (vcan)</td><td><span class="badge b-ok">working</span></td><td><code>python -m wscanfd bridge</code></td></tr>
+<tr><td>Channel 1 (CAN2 connector)</td><td><span class="badge b-ok">working</span></td><td>82/82 at 500k/2M and 250k/5M; RX on EP 0x83, no cross-talk to channel 0</td></tr>
+<tr><td>Termination</td><td><span class="badge b-part">hardware only</span></td><td>Physical switch on the case. The protocol's software flag does nothing on this board</td></tr>
+<tr><td>Error / bus state</td><td><span class="badge b-part">partly understood</span></td><td>No error records on the RX endpoints, no TX confirmation; 0x800D returns a stale ECR/PSR snapshot (<a href="#p-status">3.12</a>)</td></tr>
+<tr><td>Multiple adapters</td><td><span class="badge b-part">kernel only</span></td><td>The kernel driver probes each adapter separately (untested with two); the userspace driver uses the first one found</td></tr>
+<tr><td>Native SocketCAN kernel module</td><td><span class="badge b-ok">working</span></td><td>Builds clean (W=1, 7.0.0-43), probes, rmmod/insmod cycles clean, 82/82 FD round trips, 2000-frame bursts with zero loss. Tested on can1 (CAN2) only; unplug/replug not yet tested (<a href="#kernel">section 6</a>)</td></tr>
+<tr><td>TX flow control</td><td><span class="badge b-part">driver-side only</span></td><td>The firmware drops frames beyond its ~10-frame buffer without telling the host. The kernel driver paces TX; the userspace driver does not (<a href="#quirks">quirks</a>)</td></tr>
+</table></div>
+
+<h3 id="quickstart">Quick start</h3>
+<p><strong>Kernel driver</strong> (recommended):</p>
+<pre><code>make -C kernel &amp;&amp; sudo modprobe can-dev &amp;&amp; sudo insmod kernel/wscanfd.ko
+sudo ip link set can0 type can bitrate 500000 sample-point 0.8 dbitrate 2000000 fd on
+sudo ip link set can0 up &amp;&amp; candump can0</code></pre>
+<p><strong>Userspace driver</strong> (no kernel module):</p>
+<pre><code>python3 -m venv .venv &amp;&amp; .venv/bin/pip install pyusb pytest
+sudo install -m 644 udev/70-wscanfd.rules /etc/udev/rules.d/ &amp;&amp; sudo udevadm control --reload
+# replug the adapter, then:
+.venv/bin/python -m wscanfd info
+.venv/bin/python -m wscanfd dump -c both -b 250000</code></pre>
+<p>Channel 0 is the connector labelled <strong>CAN1</strong>, channel 1 is <strong>CAN2</strong>.</p>
+
+<h3 id="architecture">Architecture</h3>
+<p>There are two ways to get frames from applications to the bus. The kernel module is a normal SocketCAN driver. As an alternative that needs no kernel module, the userspace bridge copies frames between a virtual <code>vcan</code> interface and the adapter through libusb. Both paths speak the same USB protocol to the adapter's firmware.</p>
+<figure>
+<svg class="dg" viewBox="0 0 880 640" role="img" aria-labelledby="f1t">
+<title id="f1t">System architecture: applications, SocketCAN, kernel module or vcan bridge, usbcore, USB endpoints, firmware, MCAN controllers, isolated transceivers, connectors</title>
+<defs><marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3b4350"/></marker><marker id="m1s" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#3b4350"/></marker></defs>
+<rect class="neu" x="40" y="16" width="800" height="44" rx="6"/>
+<text class="c" x="440" y="43">Applications: candump, cansend, python-can, Wireshark, your own code</text>
+<line class="ln" x1="440" y1="60" x2="440" y2="88" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<rect class="bx" x="40" y="88" width="800" height="44" rx="6"/>
+<text class="c" x="440" y="115">SocketCAN core (PF_CAN, CAN_RAW sockets)</text>
+<line class="ln" x1="230" y1="132" x2="230" y2="170" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<line class="ln" x1="650" y1="132" x2="650" y2="170" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<text class="s" x="240" y="156">native path</text>
+<text class="s" x="660" y="156">bridge path (no kernel module)</text>
+<rect class="krn" x="40" y="170" width="380" height="44" rx="6"/>
+<text class="c" x="230" y="197">can0 / can1 (CAN netdevs, set up with ip link)</text>
+<rect class="bx" x="460" y="170" width="380" height="44" rx="6"/>
+<text class="c" x="650" y="197">vcan0 (virtual CAN, mtu 72)</text>
+<rect class="krn" x="40" y="244" width="380" height="58" rx="6"/>
+<text class="c h" x="230" y="268">wscanfd.ko kernel module</text>
+<text class="c s" x="230" y="288">native SocketCAN driver, TX pacing</text>
+<line class="ln" x1="230" y1="214" x2="230" y2="244" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<line class="ln" x1="650" y1="214" x2="650" y2="244" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<text class="s" x="660" y="234">CAN_RAW socket</text>
+<rect class="neu" x="460" y="244" width="380" height="58" rx="6"/>
+<text class="c h" x="650" y="268">wscanfd bridge (Python, userspace)</text>
+<text class="c s m" x="650" y="288">python -m wscanfd bridge -i vcan0</text>
+<line class="ln" x1="650" y1="302" x2="650" y2="330" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<rect class="neu" x="460" y="330" width="380" height="44" rx="6"/>
+<text class="c" x="650" y="357">pyusb → libusb-1.0 → usbfs</text>
+<line class="ln" x1="230" y1="302" x2="230" y2="404" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<text class="s" x="240" y="358">URBs</text>
+<line class="ln" x1="650" y1="374" x2="650" y2="404" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<rect class="bx" x="40" y="404" width="800" height="40" rx="6"/>
+<text class="c" x="440" y="429">Linux usbcore + USB host controller driver</text>
+<line class="ln" x1="440" y1="444" x2="440" y2="488" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<text class="s" x="452" y="471">USB 2.0 high-speed, bulk: EP1 OUT/IN, EP2 IN (0x82), EP3 IN (0x83)</text>
+<rect class="neu dash" x="20" y="488" width="840" height="140" rx="8" style="fill:#fbfbfc"/>
+<text class="h" x="34" y="507">Waveshare USB-CAN-FD (04d8:0053)</text>
+<rect class="dev" x="40" y="516" width="300" height="100" rx="6"/>
+<text class="c h" x="190" y="541">NXP LPC54616J512 firmware</text>
+<text class="c s" x="190" y="561">USB device, interface 0</text>
+<text class="c s" x="190" y="578">framed commands + TX on EP1</text>
+<text class="c s" x="190" y="595">RX records on EP 0x82 / 0x83</text>
+<rect class="dev" x="380" y="516" width="110" height="44" rx="6"/>
+<text class="c" x="435" y="543">ch 0 (MCAN)</text>
+<rect class="dev" x="380" y="572" width="110" height="44" rx="6"/>
+<text class="c" x="435" y="599">ch 1 (MCAN)</text>
+<rect class="phy" x="525" y="516" width="180" height="44" rx="6"/>
+<text class="c" x="615" y="535">isolated transceiver</text>
+<text class="c xs" x="615" y="551">DC/DC, isolator, CMC, TVS</text>
+<rect class="phy" x="525" y="572" width="180" height="44" rx="6"/>
+<text class="c" x="615" y="591">isolated transceiver</text>
+<text class="c xs" x="615" y="607">DC/DC, isolator, CMC, TVS</text>
+<rect class="phy" x="740" y="516" width="100" height="44" rx="6"/>
+<text class="c h" x="790" y="535">CAN1</text>
+<text class="c xs" x="790" y="551">120 Ω switch</text>
+<rect class="phy" x="740" y="572" width="100" height="44" rx="6"/>
+<text class="c h" x="790" y="591">CAN2</text>
+<text class="c xs" x="790" y="607">120 Ω switch</text>
+<line class="ln" x1="340" y1="538" x2="380" y2="538" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<line class="ln" x1="340" y1="594" x2="380" y2="594" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<line class="ln" x1="490" y1="538" x2="525" y2="538" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<line class="ln" x1="490" y1="594" x2="525" y2="594" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<line class="ln" x1="705" y1="538" x2="740" y2="538" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+<line class="ln" x1="705" y1="594" x2="740" y2="594" marker-start="url(#m1s)" marker-end="url(#m1)"/>
+</svg>
+<figcaption>Figure 1. System overview. Protocol channel 0 is the CAN1 connector and channel 1 is CAN2.</figcaption>
+</figure>
+
+<!-- ============================================================ 2 -->
+<h2 id="hardware">2. Hardware</h2>
+<dl class="kv">
+  <dt>Product</dt><dd>Waveshare USB-CAN-FD, non-B model, SKU 25029</dd>
+  <dt>USB ID</dt><dd><code>04d8:0053</code>, a borrowed Microchip vendor ID. Strings: "NXP SEMICONDUCTORS" / "USB CANFD DEBUG"</dd>
+  <dt>USB</dt><dd>High-speed, one vendor-specific interface (0). Endpoints EP1 OUT/IN, EP2 OUT/IN, EP3 IN, all bulk, 512-byte max packet</dd>
+  <dt>MCU</dt><dd>NXP LPC54616J512BD100: Cortex-M4, 512 KB flash, 2 MCAN CAN FD controllers, USB FS + HS</dd>
+  <dt>CAN clock</dt><dd>60 MHz MCAN clock (all reference timing words decode exactly with it)</dd>
+  <dt>Channels</dt><dd>2, galvanically isolated, each with its own DC/DC, digital isolator, transceiver, common-mode choke, TVS and switchable 120 Ω termination</dd>
+  <dt>Firmware seen</dt><dd>hardware 2.00, firmware 2.12, serial <code>USBCANFD20240809xxxx</code></dd>
+  <dt>Debug</dt><dd>SWD header J1 (RESET / 3.3V / DIO / CLK / GND), populated and labelled</dd>
+</dl>
+<figure>
+<svg class="dg" viewBox="0 0 1441 1081" role="img" aria-labelledby="f2t">
+<title id="f2t">Annotated PCB photo of the USB-CAN-FD</title>
+<image href="pcb.jpg" x="0" y="0" width="1441" height="1081"/>
+<g style="font-size:28px;font-weight:700">
+<g><circle cx="1005" cy="760" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="1005" y="770" class="c" style="fill:#fff">1</text></g>
+<g><circle cx="1213" cy="895" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="1213" y="905" class="c" style="fill:#fff">2</text></g>
+<g><circle cx="1240" cy="560" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="1240" y="570" class="c" style="fill:#fff">3</text></g>
+<g><circle cx="1085" cy="430" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="1085" y="440" class="c" style="fill:#fff">4</text></g>
+<g><circle cx="750" cy="440" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="750" y="450" class="c" style="fill:#fff">5</text></g>
+<g><circle cx="750" cy="790" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="750" y="800" class="c" style="fill:#fff">5</text></g>
+<g><circle cx="675" cy="225" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="675" y="235" class="c" style="fill:#fff">6</text></g>
+<g><circle cx="675" cy="625" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="675" y="635" class="c" style="fill:#fff">6</text></g>
+<g><circle cx="505" cy="215" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="505" y="225" class="c" style="fill:#fff">7</text></g>
+<g><circle cx="505" cy="625" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="505" y="635" class="c" style="fill:#fff">7</text></g>
+<g><circle cx="390" cy="255" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="390" y="265" class="c" style="fill:#fff">8</text></g>
+<g><circle cx="405" cy="665" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="405" y="675" class="c" style="fill:#fff">8</text></g>
+<g><circle cx="300" cy="262" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="300" y="272" class="c" style="fill:#fff">9</text></g>
+<g><circle cx="310" cy="822" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="310" y="832" class="c" style="fill:#fff">9</text></g>
+<g><circle cx="205" cy="250" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="205" y="260" class="c" style="fill:#fff">10</text></g>
+<g><circle cx="185" cy="835" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="185" y="845" class="c" style="fill:#fff">10</text></g>
+<g><circle cx="165" cy="550" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="165" y="560" class="c" style="fill:#fff">11</text></g>
+<g><circle cx="380" cy="395" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="380" y="405" class="c" style="fill:#fff">12</text></g>
+<g><circle cx="295" cy="645" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="295" y="655" class="c" style="fill:#fff">12</text></g>
+<g><circle cx="305" cy="470" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="305" y="480" class="c" style="fill:#fff">13</text></g>
+<g><circle cx="470" cy="545" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="470" y="555" class="c" style="fill:#fff">14</text></g>
+<g><circle cx="1310" cy="285" r="26" fill="#c0392b" stroke="#fff" stroke-width="4"/><text x="1310" y="295" class="c" style="fill:#fff">15</text></g>
+</g>
+</svg>
+<figcaption>Figure 2. The PCB. The upper and lower halves are the two isolated channels (which half is CAN1 was not traced). The light stripes are the isolation gaps between the USB/MCU side and each CAN side.</figcaption>
+</figure>
+<ol class="legend">
+  <li><strong>U1</strong> NXP LPC54616J512BD100 MCU (runs the firmware, both MCANs)</li>
+  <li><strong>J1</strong> SWD header: RESET, 3.3V, DIO, CLK, GND</li>
+  <li><strong>U14</strong> USB-B connector</li>
+  <li><strong>U2</strong> AMS1117-3.3 regulator</li>
+  <li><strong>U7, U8</strong> Mornsun F0505XT-1WR3 isolated 5 V DC/DC converters, one per channel</li>
+  <li><strong>U3, U4</strong> digital isolators</li>
+  <li><strong>U5, U6</strong> CAN transceivers</li>
+  <li><strong>U10, U11</strong> EPCOS B82793 common-mode chokes</li>
+  <li>120 Ω termination resistors (two 1206 parts marked "1200" per channel)</li>
+  <li>Termination switches (blue, red)</li>
+  <li>Green terminal block: CAN1 / CAN2 bus connections</li>
+  <li><strong>TVS1, TVS2</strong> transient voltage suppressors</li>
+  <li><strong>U12</strong> part marked "B3D090M-C" on the upper channel only, probably a surge arrester (not verified)</li>
+  <li>Isolation gap (no copper)</li>
+  <li>Two LEDs with series resistors R14-R17</li>
+</ol>
+
+<!-- ============================================================ 4 -->
+<h2 id="protocol">3. Protocol reference</h2>
+<p>All multi-byte fields in the command framing and in command payloads are <strong>big-endian</strong>. The exception is the RX records on EP 0x82/0x83: they are raw MCAN RX buffer elements and are <strong>little-endian</strong>. The reference implementation is <code>wscanfd/protocol.py</code> (and <code>kernel/wscanfd.c</code>), and <code>tests/test_protocol.py</code> checks it against known-good byte sequences.</p>
+
+<h3 id="p-endpoints">3.1 Endpoints</h3>
+<figure>
+<svg class="dg" viewBox="0 0 880 420" role="img" aria-labelledby="f3t">
+<title id="f3t">USB endpoint map</title>
+<defs><marker id="m3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3b4350"/></marker><marker id="m3s" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#3b4350"/></marker></defs>
+<rect class="bx" x="20" y="30" width="190" height="370" rx="8"/>
+<text class="c h" x="115" y="56">Host</text>
+<text class="c s" x="115" y="76">wscanfd (libusb) or</text>
+<text class="c s" x="115" y="92">wscanfd.ko (URBs)</text>
+<rect class="dev" x="670" y="30" width="190" height="370" rx="8"/>
+<text class="c h" x="765" y="56">Adapter firmware</text>
+<text class="c s" x="765" y="76">LPC54616, interface 0</text>
+<text class="c s" x="765" y="92">bulk, 512 B max packet</text>
+<!-- row 1 -->
+<text class="c h m" x="440" y="128">EP1 OUT (0x01)</text>
+<line class="ln" x1="210" y1="135" x2="670" y2="135" marker-end="url(#m3)"/>
+<text class="c s" x="440" y="151">all commands (0x8001-0x800D) and TX frames for both channels</text>
+<text class="c s" x="440" y="165">(cmd 0x8004; the channel is a byte in the payload)</text>
+<!-- row 2 -->
+<text class="c h m" x="440" y="186">EP1 IN (0x81)</text>
+<line class="ln" x1="670" y1="193" x2="210" y2="193" marker-end="url(#m3)"/>
+<text class="c s" x="440" y="209">framed reply to every command, same cmd ID</text>
+<text class="c s" x="440" y="223">no reply to 0x8004 Transmit</text>
+<!-- row 3 -->
+<text class="c h m" x="440" y="244" style="fill:#7a818c">EP2 OUT (0x02)</text>
+<line class="ln dash" x1="210" y1="251" x2="670" y2="251" marker-end="url(#m3)" style="stroke:#9aa2ae"/>
+<text class="c s" x="440" y="267">unused by this driver: TX for both channels goes to</text>
+<text class="c s" x="440" y="281">EP1 OUT, with the channel byte in the payload</text>
+<!-- row 4 -->
+<text class="c h m" x="440" y="302">EP2 IN (0x82)</text>
+<line class="lng" x1="670" y1="309" x2="210" y2="309" marker-end="url(#m3)"/>
+<text class="c s" x="440" y="325">channel 0 (CAN1) RX records, unframed, several per transfer</text>
+<text class="c s" x="440" y="339">8 zero bytes when idle</text>
+<!-- row 5 -->
+<text class="c h m" x="440" y="360">EP3 IN (0x83)</text>
+<line class="lng" x1="670" y1="367" x2="210" y2="367" marker-end="url(#m3)"/>
+<text class="c s" x="440" y="383">channel 1 (CAN2) RX records, same format</text>
+</svg>
+<figcaption>Figure 3. Endpoint map. Commands and all transmitted frames share EP1 OUT. Received frames arrive on a separate bulk-IN endpoint per channel.</figcaption>
+</figure>
+<div class="tablewrap"><table>
+<tr><th>Endpoint</th><th>Dir</th><th>Carries</th><th>Format</th></tr>
+<tr><td class="n">0x01 (EP1 OUT)</td><td>host → device</td><td>Commands 0x8001-0x800D; TX frames for both channels (0x8004) in our drivers</td><td>Framed (<a href="#p-framing">3.2</a>)</td></tr>
+<tr><td class="n">0x81 (EP1 IN)</td><td>device → host</td><td>Command replies. Every command except 0x8004 gets one, usually an empty-payload ack with the same cmd</td><td>Framed</td></tr>
+<tr><td class="n">0x02 (EP2 OUT)</td><td>host → device</td><td>Not used by this driver. TX for both channels goes to EP1 OUT with the channel byte in the payload</td><td>-</td></tr>
+<tr><td class="n">0x82 (EP2 IN)</td><td>device → host</td><td>Channel 0 (CAN1) received frames</td><td>Raw records (<a href="#p-rx">3.11</a>)</td></tr>
+<tr><td class="n">0x83 (EP3 IN)</td><td>device → host</td><td>Channel 1 (CAN2) received frames</td><td>Raw records</td></tr>
+</table></div>
+
+<h3 id="p-framing">3.2 Packet framing and checksum</h3>
+<p>Every command and reply on EP1 is wrapped in this frame. RX data on EP 0x82/0x83 is <em>not</em> framed.</p>
+<figure>
+<svg class="dg" viewBox="0 0 880 196" role="img" aria-labelledby="f4t">
+<title id="f4t">Packet frame layout: head, datalen, pkgall, pkgcur, cmd, payload, check, tail</title>
+<g class="xs">
+<text x="16" y="36">0</text><text x="128" y="36">2</text><text x="240" y="36">4</text><text x="296" y="36">5</text>
+<text x="352" y="36">6</text><text x="464" y="36">8</text><text x="644" y="36">8+N</text><text x="756" y="36">10+N</text>
+<text class="e" x="866" y="36">12+N</text>
+</g>
+<rect class="fhd" x="14" y="44" width="112" height="56"/><rect class="fhd" x="126" y="44" width="112" height="56"/>
+<rect class="fhd" x="238" y="44" width="56" height="56"/><rect class="fhd" x="294" y="44" width="56" height="56"/>
+<rect class="fhd" x="350" y="44" width="112" height="56"/><rect class="fpl" x="462" y="44" width="180" height="56"/>
+<rect class="fhd" x="642" y="44" width="112" height="56"/><rect class="fhd" x="754" y="44" width="112" height="56"/>
+<g class="h" style="font-size:12px">
+<text class="c" x="70" y="66">head</text><text class="c" x="182" y="66">datalen</text><text class="c" x="266" y="66">pkgall</text>
+<text class="c" x="322" y="66">pkgcur</text><text class="c" x="406" y="66">cmd</text><text class="c" x="552" y="66">payload</text>
+<text class="c" x="698" y="66">check</text><text class="c" x="810" y="66">tail</text>
+</g>
+<g class="m">
+<text class="c" x="70" y="88">BE EF</text><text class="c" x="182" y="88">N (u16)</text><text class="c" x="266" y="88">01</text>
+<text class="c" x="322" y="88">01</text><text class="c" x="406" y="88">80 xx</text><text class="c" x="552" y="88">N bytes, N ≤ 500</text>
+<text class="c" x="698" y="88">u16</text><text class="c" x="810" y="88">DE AD</text>
+</g>
+<path class="ln" d="M14,108 v6 h448 v-6"/><text class="c s" x="238" y="130">8-byte header, big-endian</text>
+<path class="ln" d="M642,108 v6 h224 v-6"/><text class="c s" x="754" y="130">4-byte trailer</text>
+<text class="c m" x="440" y="160">check = (0xBEAD + 256·pkgcur + 256·pkgall + N + 2·cmd + Σ payload BE u16 words) mod 0x10000</text>
+<text class="c s" x="440" y="182">An odd trailing payload byte is not summed. Single-packet messages use pkgall = pkgcur = 1.</text>
+</svg>
+<figcaption>Figure 4. Frame layout. The maximum payload is 500 bytes. Every message seen in practice fits in one packet.</figcaption>
+</figure>
+<div class="tablewrap"><table>
+<tr><th class="n">Offset</th><th>Size</th><th>Field</th><th>Value</th></tr>
+<tr><td class="n">0</td><td>2</td><td>head</td><td class="n">0xBEEF</td></tr>
+<tr><td class="n">2</td><td>2</td><td>datalen N</td><td>payload length, ≤ 500</td></tr>
+<tr><td class="n">4</td><td>1</td><td>pkgall</td><td>total fragments (always 1 in practice)</td></tr>
+<tr><td class="n">5</td><td>1</td><td>pkgcur</td><td>fragment index, 1-based (always 1)</td></tr>
+<tr><td class="n">6</td><td>2</td><td>cmd</td><td>command ID, 0x8001-0x800D</td></tr>
+<tr><td class="n">8</td><td>N</td><td>payload</td><td>command-specific</td></tr>
+<tr><td class="n">8+N</td><td>2</td><td>check</td><td>checksum, see below</td></tr>
+<tr><td class="n">10+N</td><td>2</td><td>tail</td><td class="n">0xDEAD</td></tr>
+</table></div>
+<h4>Worked checksum examples</h4>
+<div class="tablewrap"><table>
+<tr><th>Packet</th><th>Sum</th><th>check</th></tr>
+<tr><td>GetDeviceInf, no payload<br><span class="hex">BE EF 00 00 01 01 80 05 <b>C0 B7</b> DE AD</span></td>
+<td class="n">0x0100 + 0x0100 + 0 + 2·0x8005<br>= 0x1020A; + 0xBEAD = 0x1C0B7</td><td class="n">0xC0B7</td></tr>
+<tr><td>StartCAN ch 0, payload <code>55 80 03 00</code><br><span class="hex">BE EF 00 04 01 01 80 03 55 80 03 00 <b>19 37</b> DE AD</span></td>
+<td class="n">0x0200 + 4 + 0x10006 + 0x5580 + 0x0300<br>= 0x15A8A; + 0xBEAD = 0x21937</td><td class="n">0x1937</td></tr>
+<tr><td>Close, payload <code>55 0A</code><br><span class="hex">BE EF 00 02 01 01 80 0A 55 0A <b>15 CD</b> DE AD</span></td>
+<td class="n">0x0200 + 2 + 0x10014 + 0x550A<br>= 0x15720; + 0xBEAD = 0x215CD</td><td class="n">0x15CD</td></tr>
+</table></div>
+<p>Replies use the same framing, so the checksum can be verified the same way, for example the filter ack <span class="hex">BE EF 00 02 01 01 80 0B 7F 00 3F C5 DE AD</span>.</p>
+
+<h3 id="p-commands">3.3 Command table</h3>
+<p>Most payloads start with <code>0x55</code> followed by a sub-code. For InitCAN, ResetCAN, Close and GetStatus the sub-code equals the low byte of the command ID. StartCAN (<code>55 80</code>), Transmit (<code>55 F1</code>/<code>55 F2</code>) and the filter command (<code>7E …</code>) do not follow that pattern.</p>
+<div class="tablewrap"><table>
+<tr><th class="n">cmd</th><th>Name</th><th>Request payload</th><th>Reply payload</th><th>Used by wscanfd</th></tr>
+<tr><td class="n">0x8001</td><td>Open handshake</td><td>32 B challenge</td><td>32 B (44 B frame), not validated</td><td>yes, at open</td></tr>
+<tr><td class="n">0x8002</td><td>InitCAN</td><td>32 B (<a href="#p-init">3.7</a>)</td><td>empty</td><td>yes</td></tr>
+<tr><td class="n">0x8003</td><td>StartCAN</td><td class="n">55 80 03 ch</td><td>empty</td><td>yes</td></tr>
+<tr><td class="n">0x8004</td><td>Transmit</td><td>26 B classic / 86 B FD (<a href="#p-tx">3.10</a>)</td><td><strong>no reply</strong></td><td>yes</td></tr>
+<tr><td class="n">0x8005</td><td>GetDeviceInf</td><td>empty</td><td>76 B (88 B frame) (<a href="#p-info">3.6</a>)</td><td>yes, at open</td></tr>
+<tr><td class="n">0x8006</td><td><strong>Firmware update</strong></td><td>empty</td><td>-</td><td><strong>never send</strong></td></tr>
+<tr><td class="n">0x8007</td><td>Get user SN</td><td>not analysed</td><td></td><td>no</td></tr>
+<tr><td class="n">0x8008</td><td>Set user SN</td><td>not analysed</td><td></td><td>no</td></tr>
+<tr><td class="n">0x8009</td><td>ResetCAN</td><td class="n">55 09 29 dev ch 00 00 00</td><td class="n">00 00</td><td>yes, on channel stop</td></tr>
+<tr><td class="n">0x800A</td><td>CloseDevice</td><td class="n">55 0A</td><td class="n">00 00</td><td>yes, at close</td></tr>
+<tr><td class="n">0x800B</td><td>Filter config</td><td>4 + 8·n B; "accept all" = <code>7E ch 0F FF</code></td><td class="n">7F 00</td><td>yes (clear only)</td></tr>
+<tr><td class="n">0x800C</td><td>ClearBuffer</td><td>8 B, not analysed</td><td></td><td>no</td></tr>
+<tr><td class="n">0x800D</td><td>GetStatus</td><td class="n">55 0D 29 dev ch 00 00 00</td><td>64 B (<a href="#p-status">3.12</a>)</td><td>diagnostic only</td></tr>
+</table></div>
+<p><code>ch</code> is 0 or 1. <code>dev</code> is the device index (0). <code>0x29</code> is a fixed device-type byte.</p>
+
+<h3 id="p-sequence">3.4 Session sequence</h3>
+<figure>
+<svg class="dg" viewBox="0 0 880 710" role="img" aria-labelledby="f5t">
+<title id="f5t">Sequence diagram: open handshake, device info, init, filter, start, transmit and receive, reset, close</title>
+<defs><marker id="m5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3b4350"/></marker><marker id="m5s" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#3b4350"/></marker>
+<marker id="m5g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2e7d32"/></marker><marker id="m5gs" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#2e7d32"/></marker></defs>
+<rect class="bx" x="150" y="16" width="140" height="36" rx="6"/><text class="c h" x="220" y="39">Host driver</text>
+<rect class="dev" x="490" y="16" width="180" height="36" rx="6"/><text class="c h" x="580" y="39">Adapter firmware</text>
+<rect class="phy" x="750" y="16" width="120" height="36" rx="6"/><text class="c h" x="810" y="39">CAN bus</text>
+<line class="life" x1="220" y1="52" x2="220" y2="690"/><line class="life" x1="580" y1="52" x2="580" y2="690"/><line class="life" x1="810" y1="52" x2="810" y2="690"/>
+<!-- phases -->
+<path class="ln" d="M134,80 h-6 v145 h6" style="stroke:#8a929e"/><text class="e h" x="122" y="156">Open</text>
+<path class="ln" d="M134,250 h-6 v165 h6" style="stroke:#8a929e"/><text class="e h" x="122" y="330">Configure</text><text class="e xs" x="122" y="346">(per channel)</text>
+<path class="ln" d="M134,436 h-6 v110 h6" style="stroke:#8a929e"/><text class="e h" x="122" y="495">Run</text>
+<path class="ln" d="M134,570 h-6 v105 h6" style="stroke:#8a929e"/><text class="e h" x="122" y="627">Shut down</text>
+<!-- open -->
+<rect class="neu" x="228" y="80" width="232" height="22" rx="4"/><text class="c s" x="344" y="95">drain stale replies from EP 0x81</text>
+<text class="c s" x="400" y="119"><tspan class="ms">0x8001</tspan> OPEN: 32-byte challenge</text>
+<line class="ln" x1="220" y1="125" x2="580" y2="125" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="149">32-byte reply (not validated)</text>
+<line class="ln dash" x1="580" y1="155" x2="220" y2="155" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="184"><tspan class="ms">0x8005</tspan> GetDeviceInf (no payload)</text>
+<line class="ln" x1="220" y1="190" x2="580" y2="190" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="214">76 B: hw 2.00, fw 2.12, 2 channels, serial</text>
+<line class="ln dash" x1="580" y1="220" x2="220" y2="220" marker-end="url(#m5)"/>
+<!-- configure -->
+<text class="c s" x="400" y="254"><tspan class="ms">0x8002</tspan> InitCAN: ch, mode, timing words (32 B)</text>
+<line class="ln" x1="220" y1="260" x2="580" y2="260" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="284">ack (empty payload)</text>
+<line class="ln dash" x1="580" y1="290" x2="220" y2="290" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="314"><tspan class="ms">0x800B</tspan> filter: 7E ch 0F FF (accept all)</text>
+<line class="ln" x1="220" y1="320" x2="580" y2="320" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="344">7F 00</text>
+<line class="ln dash" x1="580" y1="350" x2="220" y2="350" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="374"><tspan class="ms">0x8003</tspan> StartCAN: 55 80 03 ch</text>
+<line class="ln" x1="220" y1="380" x2="580" y2="380" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="404">ack (empty payload)</text>
+<line class="ln dash" x1="580" y1="410" x2="220" y2="410" marker-end="url(#m5)"/>
+<!-- run -->
+<rect class="frame" x="150" y="436" width="712" height="110" rx="4"/>
+<text class="xs h" x="156" y="450">loop</text>
+<text class="c s" x="400" y="459"><tspan class="ms">0x8004</tspan> Transmit: classic 26 B / FD 86 B (no reply)</text>
+<line class="ln" x1="220" y1="465" x2="580" y2="465" marker-end="url(#m5)"/>
+<text class="c s" x="695" y="474">frame on the wire</text>
+<line class="ln" x1="580" y1="480" x2="810" y2="480" marker-end="url(#m5)"/>
+<text class="c s" x="695" y="499">frames from other nodes</text>
+<line class="lng" x1="810" y1="505" x2="580" y2="505" marker-end="url(#m5g)"/>
+<text class="c s" x="400" y="526">RX records on EP 0x82 / 0x83 (8 × 00 when idle)</text>
+<line class="lng dash" x1="580" y1="532" x2="220" y2="532" marker-end="url(#m5g)"/>
+<!-- shutdown -->
+<text class="c s" x="400" y="574"><tspan class="ms">0x8009</tspan> ResetCAN: 55 09 29 dev ch 00 00 00</text>
+<line class="ln" x1="220" y1="580" x2="580" y2="580" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="604">00 00</text>
+<line class="ln dash" x1="580" y1="610" x2="220" y2="610" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="634"><tspan class="ms">0x800A</tspan> Close: 55 0A</text>
+<line class="ln" x1="220" y1="640" x2="580" y2="640" marker-end="url(#m5)"/>
+<text class="c s" x="400" y="664">00 00</text>
+<line class="ln dash" x1="580" y1="670" x2="220" y2="670" marker-end="url(#m5)"/>
+</svg>
+<figcaption>Figure 5. A complete session, as performed by wscanfd. Commands and replies use EP1. Received frames arrive on the per-channel bulk-IN endpoints.</figcaption>
+</figure>
+<p>wscanfd follows this order: claim interface 0 (without SET_CONFIGURATION, see <a href="#quirks">quirks</a>), drain EP 0x81, open handshake, device info. Then, for each channel: InitCAN, clear the filter, drain the RX endpoint, StartCAN, and start an RX reader. To stop a channel it sends ResetCAN. Closing the device sends CloseDevice.</p>
+
+<h3 id="p-auth">3.5 0x8001 Open handshake</h3>
+<p>The host sends a 32-byte challenge: a fixed template with time and random fields. The device replies with 32 bytes. Neither driver validates the reply; a reply simply shows that the firmware is responsive.</p>
+<dl class="kv">
+  <dt>Template</dt><dd class="hex">de ff 00 3f af 67 43 01 f2 89 82 ee ce 2f 22 16 d0 1f 07 11 5f 68 b3 b1 2c e9 c2 3e c8 26 52 36</dd>
+</dl>
+<div class="tablewrap"><table>
+<tr><th class="n">Bytes</th><th>Content</th></tr>
+<tr><td class="n">0-1</td><td>template</td></tr>
+<tr><td class="n">2-5</td><td>device address, BE32 (0 in practice)</td></tr>
+<tr><td class="n">6-11</td><td>template</td></tr>
+<tr><td class="n">12-15</td><td>current time, BE32</td></tr>
+<tr><td class="n">16-21</td><td>template</td></tr>
+<tr><td class="n">22-25</td><td>random, BE32</td></tr>
+<tr><td class="n">26-31</td><td>template</td></tr>
+</table></div>
+<p>For example, with address 0 and time <code>0x6AFA6ECF</code>, the challenge begins <span class="hex">de ff 00 00 00 00 43 01 f2 89 82 ee 6a fa 6e cf …</span>.</p>
+
+<h3 id="p-info">3.6 0x8005 Device info</h3>
+<p>The request has no payload. The reply payload is 76 bytes (an 88-byte frame):</p>
+<div class="tablewrap"><table>
+<tr><th class="n">Bytes</th><th>Content</th><th>Observed</th></tr>
+<tr><td class="n">0-1</td><td>hardware version, BE16 (major.minor as hex bytes)</td><td class="n">02 00 → 2.00</td></tr>
+<tr><td class="n">2-3</td><td>firmware version, BE16</td><td class="n">02 12 → 2.12</td></tr>
+<tr><td class="n">4-7</td><td>BE32, number of channels</td><td class="n">00 00 00 02</td></tr>
+<tr><td class="n">8-27</td><td>serial number, 20 ASCII characters, NUL-padded</td><td class="n">USBCANFD20240809xxxx</td></tr>
+<tr><td class="n">28-75</td><td>not decoded</td><td></td></tr>
+</table></div>
+
+<h3 id="p-init">3.7 0x8002 InitCAN</h3>
+<p>Sent once per channel before StartCAN. The 32-byte payload:</p>
+<div class="tablewrap"><table>
+<tr><th class="n">Bytes</th><th>Field</th><th>wscanfd value</th><th>Meaning</th></tr>
+<tr><td class="n">0</td><td>marker</td><td class="n">55</td><td></td></tr>
+<tr><td class="n">1</td><td>sub-code</td><td class="n">02</td><td></td></tr>
+<tr><td class="n">2</td><td>channel</td><td class="n">00 / 01</td><td>0 = CAN1, 1 = CAN2</td></tr>
+<tr><td class="n">3</td><td>can_type</td><td class="n">01</td><td>1 = CAN FD, 0 = classic</td></tr>
+<tr><td class="n">4</td><td>mode</td><td class="n">00 / 01</td><td>0 = normal, <strong>1 = listen-only</strong> (confirmed on hardware)</td></tr>
+<tr><td class="n">5</td><td>filter</td><td class="n">01</td><td>"single filter"</td></tr>
+<tr><td class="n">6-9</td><td>acc_code, BE32</td><td class="n">00000000</td><td></td></tr>
+<tr><td class="n">10-13</td><td>acc_mask, BE32</td><td class="n">FFFFFFFF</td><td></td></tr>
+<tr><td class="n">14-17</td><td>-</td><td class="n">00…</td><td>Byte 14 = <code>0x80</code> is a "custom baud" flag. It is not needed: our drivers leave it 0, and computed rates such as 200k work</td></tr>
+<tr><td class="n">18-21</td><td>abit, BE32</td><td>timing word</td><td>nominal (arbitration) bit timing (<a href="#p-timing">3.8</a>)</td></tr>
+<tr><td class="n">22-25</td><td>dbit, BE32</td><td>timing word</td><td>data-phase bit timing</td></tr>
+<tr><td class="n">26-29</td><td>brp, BE32</td><td class="n">00000000</td><td>unused, 0</td></tr>
+<tr><td class="n">30</td><td>flags</td><td class="n">00</td><td><code>0x80</code> = non-ISO CAN FD; <code>0x40</code> = termination, <strong>a no-op on this board</strong></td></tr>
+<tr><td class="n">31</td><td>-</td><td class="n">00</td><td></td></tr>
+</table></div>
+<p>Example InitCAN for channel 0 at 250k, with the default 1M data rate (the first 32 bytes of the 44-byte frame):<br>
+<span class="hex">beef 0020 0101 8002 | 55 02 00 01 00 01 00000000 ffffffff 00000000 <b>0014be2f</b> <b>0303</b>…</span><br>
+abit = <code>0x0014BE2F</code> (250k), and dbit starts with <code>03 03</code> (the default <code>0x03030A02</code>, 1 Mbit/s). The firmware takes about 35 ms to ack InitCAN.</p>
+
+<h3 id="p-timing">3.8 Bit-timing words</h3>
+<p>The abit and dbit words carry the raw fields of the MCAN NBTP/DBTP registers, each stored as value − 1, packed into a big-endian 32-bit word. With the 60 MHz MCAN clock, any bitrate can be computed.</p>
+<figure>
+<svg class="dg" viewBox="0 0 880 280" role="img" aria-labelledby="f6t">
+<title id="f6t">Bit-timing word layout with the 500 kbit/s worked example</title>
+<g class="xs">
+<text x="42" y="34">31</text><text class="e" x="238" y="34">24</text><text x="242" y="34">23</text><text class="e" x="438" y="34">16</text>
+<text x="442" y="34">15</text><text class="e" x="638" y="34">8</text><text x="642" y="34">7</text><text class="e" x="838" y="34">0</text>
+</g>
+<rect class="fhd" x="40" y="40" width="200" height="46"/><rect class="fhd" x="240" y="40" width="200" height="46"/>
+<rect class="fhd" x="440" y="40" width="200" height="46"/><rect class="fhd" x="640" y="40" width="200" height="46"/>
+<text class="c h" x="140" y="60">BRP − 1</text><text class="c h" x="340" y="60">SJW − 1</text>
+<text class="c h" x="540" y="60">TSEG1 − 1</text><text class="c h" x="740" y="60">TSEG2 − 1</text>
+<text class="c xs" x="140" y="78">nominal 1-256 · data 1-32</text><text class="c xs" x="340" y="78">nominal ≤ 128 · data ≤ 16</text>
+<text class="c xs" x="540" y="78">nominal 2-256 · data 1-32</text><text class="c xs" x="740" y="78">nominal 2-128 · data 1-16</text>
+<g class="m"><text class="c" x="140" y="108">0x00</text><text class="c" x="340" y="108">0x02</text><text class="c" x="540" y="108">0x5E</text><text class="c" x="740" y="108">0x17</text></g>
+<g class="s"><text class="c" x="140" y="126">BRP = 1</text><text class="c" x="340" y="126">SJW = 3</text><text class="c" x="540" y="126">TSEG1 = 95</text><text class="c" x="740" y="126">TSEG2 = 24</text></g>
+<rect x="40" y="170" width="6.67" height="30" style="fill:#c7d3e3;stroke:#4a5566"/>
+<rect x="46.67" y="170" width="633.33" height="30" style="fill:#e6eef8;stroke:#4a5566"/>
+<rect x="680" y="170" width="160" height="30" style="fill:#fff3d6;stroke:#4a5566"/>
+<text class="c s" x="363" y="190">Prop_Seg + Phase_Seg1 = TSEG1 = 95 TQ</text>
+<text class="c s" x="760" y="190">TSEG2 = 24 TQ</text>
+<text class="s" x="40" y="216">Sync = 1 TQ</text>
+<line class="sp" x1="680" y1="158" x2="680" y2="208"/>
+<text class="c s red" x="680" y="152" style="fill:#c0392b">sample point: 96 / 120 = 80 %</text>
+<text class="c s" x="440" y="236">1 bit = 1 + 95 + 24 = 120 TQ;  TQ = BRP / 60 MHz = 16.67 ns</text>
+<text class="c h" x="440" y="264">bitrate = 60 MHz / (BRP × 120 TQ) = 60 000 000 / 120 = 500 000 bit/s</text>
+</svg>
+<figcaption>Figure 6. Timing word <code>[31:24] BRP−1, [23:16] SJW−1, [15:8] TSEG1−1, [7:0] TSEG2−1</code>, with the 500 kbit/s reference word <code>0x00025E17</code> decoded. The ranges are the limits the kernel driver advertises.</figcaption>
+</figure>
+<p><strong>Formulas:</strong> TQ per bit = 1 + TSEG1 + TSEG2. Bitrate = 60 MHz / (BRP × TQ per bit). Sample point = (1 + TSEG1) / (TQ per bit). TSEG1 includes the propagation segment.</p>
+<h4>Reference timing values</h4>
+<p>Known-good timing words, all tested on hardware. The userspace driver uses them verbatim when the requested rate matches. All of them decode exactly to the nominal rate at 60 MHz, and most use an 80 % sample point.</p>
+<div class="tablewrap"><table>
+<tr><th>Nominal</th><th class="n">abit word</th><th>BRP</th><th>SJW</th><th>TSEG1</th><th>TSEG2</th><th>TQ/bit</th><th>SP</th></tr>
+<tr><td>1 Mbit/s</td><td class="n">0x00022E0B</td><td>1</td><td>3</td><td>47</td><td>12</td><td>60</td><td>80 %</td></tr>
+<tr><td>800 kbit/s</td><td class="n">0x00023A0E</td><td>1</td><td>3</td><td>59</td><td>15</td><td>75</td><td>80 %</td></tr>
+<tr><td>500 kbit/s</td><td class="n">0x00025E17</td><td>1</td><td>3</td><td>95</td><td>24</td><td>120</td><td>80 %</td></tr>
+<tr><td>250 kbit/s</td><td class="n">0x0014BE2F</td><td>1</td><td>21</td><td>191</td><td>48</td><td>240</td><td>80 %</td></tr>
+<tr><td>125 kbit/s</td><td class="n">0x0114BE2F</td><td>2</td><td>21</td><td>191</td><td>48</td><td>240</td><td>80 %</td></tr>
+<tr><td>100 kbit/s</td><td class="n">0x0314761D</td><td>4</td><td>21</td><td>119</td><td>30</td><td>150</td><td>80 %</td></tr>
+<tr><td>50 kbit/s</td><td class="n">0x0314EE3B</td><td>4</td><td>21</td><td>239</td><td>60</td><td>300</td><td>80 %</td></tr>
+</table></div>
+<div class="tablewrap"><table>
+<tr><th>Data</th><th class="n">dbit word</th><th>BRP</th><th>SJW</th><th>TSEG1</th><th>TSEG2</th><th>TQ/bit</th><th>SP</th></tr>
+<tr><td>5 Mbit/s</td><td class="n">0x00010702</td><td>1</td><td>2</td><td>8</td><td>3</td><td>12</td><td>75 %</td></tr>
+<tr><td>4 Mbit/s</td><td class="n">0x00010A02</td><td>1</td><td>2</td><td>11</td><td>3</td><td>15</td><td>80 %</td></tr>
+<tr><td>3 Mbit/s</td><td class="n">0x01000601</td><td>2</td><td>1</td><td>7</td><td>2</td><td>10</td><td>80 %</td></tr>
+<tr><td>2.5 Mbit/s</td><td class="n">0x01010702</td><td>2</td><td>2</td><td>8</td><td>3</td><td>12</td><td>75 %</td></tr>
+<tr><td>2 Mbit/s</td><td class="n">0x01010A02</td><td>2</td><td>2</td><td>11</td><td>3</td><td>15</td><td>80 %</td></tr>
+<tr><td>1 Mbit/s</td><td class="n">0x03010A02</td><td>4</td><td>2</td><td>11</td><td>3</td><td>15</td><td>80 %</td></tr>
+<tr><td>800 kbit/s</td><td class="n">0x04010A02</td><td>5</td><td>2</td><td>11</td><td>3</td><td>15</td><td>80 %</td></tr>
+<tr><td>500 kbit/s</td><td class="n">0x05020E03</td><td>6</td><td>3</td><td>15</td><td>4</td><td>20</td><td>80 %</td></tr>
+<tr><td>250 kbit/s</td><td class="n">0x0B020E03</td><td>12</td><td>3</td><td>15</td><td>4</td><td>20</td><td>80 %</td></tr>
+<tr><td>100 kbit/s</td><td class="n">0x1D020E03</td><td>30</td><td>3</td><td>15</td><td>4</td><td>20</td><td>80 %</td></tr>
+</table></div>
+<p>The default dbit word, used when FD is off, is <code>0x03030A02</code> (BRP 4, SJW 4, TSEG1 11, TSEG2 3 = 1 Mbit/s). For rates not in the tables, <code>protocol.calc_timing()</code> searches BRP for an exact TQ count (at least 8 TQ per bit, within 0.5 %) at an 80 % sample point, with SJW = min(TSEG2, 128 nominal or 16 data). For example, 200 kbit/s becomes <code>0x003BEE3B</code> (BRP 1, TSEG1 239, TSEG2 60, SJW 60).</p>
+
+<h3 id="p-small">3.9 Filter, StartCAN, ResetCAN, CloseDevice</h3>
+<div class="tablewrap"><table>
+<tr><th>Command</th><th>Payload</th><th>Full frame (ch 0)</th><th>Reply</th></tr>
+<tr><td>0x800B clear filter / accept all</td><td class="n">7E ch 0F FF</td><td class="hex">beef 0004 0101 800b 7e000fff 4ec6 dead</td><td class="n">7F 00</td></tr>
+<tr><td>0x8003 StartCAN</td><td class="n">55 80 03 ch</td><td class="hex">beef 0004 0101 8003 55800300 1937 dead</td><td>empty</td></tr>
+<tr><td>0x8009 ResetCAN</td><td class="n">55 09 29 dev ch 00 00 00</td><td class="hex">beef 0008 0101 8009 5509290000000000 3ed0 dead</td><td class="n">00 00</td></tr>
+<tr><td>0x800A CloseDevice</td><td class="n">55 0A</td><td class="hex">beef 0002 0101 800a 550a 15cd dead</td><td class="n">00 00</td></tr>
+</table></div>
+<p>The general filter payload is 4 + 8·n bytes (n filter entries). Only the "clear / accept all" form has been decoded and used. With no filters configured, received frames report FIDX = 0x7F and ANMF = 1 ("accepted non-matching frame"), which is consistent with accept-all.</p>
+
+<h3 id="p-tx">3.10 0x8004 Transmit</h3>
+<p>Our drivers send TX frames for <strong>both</strong> channels to EP1 OUT as framed 0x8004 commands, and the payload selects the channel. There is <strong>no reply</strong> and no later confirmation (<a href="#quirks">quirks</a>).</p>
+<figure>
+<svg class="dg" viewBox="0 0 880 236" role="img" aria-labelledby="f7t">
+<title id="f7t">TX payload layouts: classic 26 bytes and CAN FD 86 bytes</title>
+<text class="h" x="24" y="20">Classic TX payload (55 F1), 26 bytes</text>
+<g class="xs">
+<text x="52" y="38">0</text><text x="82" y="38">1</text><text x="112" y="38">2</text><text x="172" y="38">4</text><text x="202" y="38">5</text>
+<text x="232" y="38">6</text><text x="352" y="38">10</text><text x="382" y="38">11</text><text x="622" y="38">19</text><text x="652" y="38">20</text>
+<text x="682" y="38">21</text><text x="712" y="38">22</text><text class="e" x="830" y="38">26</text>
+</g>
+<rect class="fhd" x="50" y="42" width="30" height="40"/><rect class="fhd" x="80" y="42" width="30" height="40"/>
+<rect class="fz" x="110" y="42" width="60" height="40"/><rect class="fld" x="170" y="42" width="30" height="40"/>
+<rect class="fld" x="200" y="42" width="30" height="40"/><rect class="fld" x="230" y="42" width="120" height="40"/>
+<rect class="fld" x="350" y="42" width="30" height="40"/><rect class="fpl" x="380" y="42" width="240" height="40"/>
+<rect class="fz" x="620" y="42" width="30" height="40"/><rect class="fld" x="650" y="42" width="30" height="40"/>
+<rect class="fld" x="680" y="42" width="30" height="40"/><rect class="fz" x="710" y="42" width="120" height="40"/>
+<g class="ms">
+<text class="c" x="65" y="66">55</text><text class="c" x="95" y="66">F1</text><text class="c" x="140" y="66">00 00</text>
+<text class="c" x="185" y="66">ext</text><text class="c" x="215" y="66">rtr</text><text class="c" x="290" y="66">CAN ID (BE32)</text>
+<text class="c" x="365" y="66">dlc</text><text class="c" x="500" y="66">data[8]</text><text class="c" x="635" y="66">0</text>
+<text class="c" x="665" y="66">ch</text><text class="c" x="695" y="66" style="font-size:9.5px">type</text><text class="c" x="770" y="66">0</text>
+</g>
+<text class="h" x="24" y="120">CAN FD TX payload (55 F2), 86 bytes</text>
+<g class="xs">
+<text x="27" y="138">0</text><text x="57" y="138">1</text><text x="87" y="138">2</text><text x="147" y="138">4</text><text x="177" y="138">5</text>
+<text x="207" y="138">6</text><text x="327" y="138">10</text><text x="357" y="138">11</text><text x="397" y="138">12</text><text x="427" y="138">13</text>
+<text x="457" y="138">14</text><text x="677" y="138">78</text><text x="737" y="138">81</text><text x="767" y="138">82</text><text class="e" x="855" y="138">86</text>
+</g>
+<rect class="fhd" x="25" y="142" width="30" height="40"/><rect class="fhd" x="55" y="142" width="30" height="40"/>
+<rect class="fz" x="85" y="142" width="60" height="40"/><rect class="fld" x="145" y="142" width="30" height="40"/>
+<rect class="fld" x="175" y="142" width="30" height="40"/><rect class="fld" x="205" y="142" width="120" height="40"/>
+<rect class="fld" x="325" y="142" width="30" height="40"/><rect class="fld" x="355" y="142" width="40" height="40"/>
+<rect class="fhd" x="395" y="142" width="30" height="40"/><rect class="fld" x="425" y="142" width="30" height="40"/>
+<rect class="fpl" x="455" y="142" width="220" height="40"/><rect class="fz" x="675" y="142" width="60" height="40"/>
+<rect class="fld" x="735" y="142" width="30" height="40"/><rect class="fz" x="765" y="142" width="90" height="40"/>
+<g class="ms">
+<text class="c" x="40" y="166">55</text><text class="c" x="70" y="166">F2</text><text class="c" x="115" y="166">00 00</text>
+<text class="c" x="160" y="166">ext</text><text class="c" x="190" y="166">rtr</text><text class="c" x="265" y="166">CAN ID (BE32)</text>
+<text class="c" x="340" y="166">len</text><text class="c" x="375" y="166">flags</text><text class="c" x="410" y="166">01</text>
+<text class="c" x="440" y="166">ch</text><text class="c" x="565" y="166">data[64] (not to scale)</text><text class="c" x="705" y="166">0</text>
+<text class="c" x="750" y="166" style="font-size:9.5px">type</text><text class="c" x="810" y="166">0</text>
+</g>
+<text class="s" x="24" y="208">ext, rtr: 0 or 1.  dlc (classic): 0-8.  len (FD): payload length rounded up to a valid FD length (0-8, 12, 16, 20, 24, 32, 48, 64).</text>
+<text class="s" x="24" y="226">flags bit 0 = BRS (confirmed).  ch: 0 = CAN1, 1 = CAN2.  type: transmit_type, 0 = normal (auto-retransmit).  Grey = zero.</text>
+</svg>
+<figcaption>Figure 7. TX payloads. Both are wrapped in a 0x8004 frame, which adds 12 bytes, so a classic TX is a 38-byte USB transfer and an FD TX is 98 bytes.</figcaption>
+</figure>
+<div class="tablewrap"><table>
+<tr><th>Classic (26 B)</th><th>CAN FD (86 B)</th><th>Field</th></tr>
+<tr><td class="n">[0..1] 55 F1</td><td class="n">[0..1] 55 F2</td><td>marker + type</td></tr>
+<tr><td class="n">[4]</td><td class="n">[4]</td><td>ext: 1 = 29-bit ID</td></tr>
+<tr><td class="n">[5]</td><td class="n">[5]</td><td>rtr: 1 = remote frame</td></tr>
+<tr><td class="n">[6..9]</td><td class="n">[6..9]</td><td>CAN ID, BE32, no flag bits</td></tr>
+<tr><td class="n">[10]</td><td class="n">[10]</td><td>classic: DLC 0-8; FD: length in bytes (padded up to a valid FD size)</td></tr>
+<tr><td class="n">[11..18]</td><td class="n">[14..77]</td><td>data</td></tr>
+<tr><td class="n">-</td><td class="n">[11]</td><td>flags: bit 0 = BRS</td></tr>
+<tr><td class="n">-</td><td class="n">[12]</td><td>always 1</td></tr>
+<tr><td class="n">[20]</td><td class="n">[13]</td><td>channel 0/1</td></tr>
+<tr><td class="n">[21]</td><td class="n">[81] (0x51)</td><td>transmit_type: 0 = normal</td></tr>
+</table></div>
+<p>Example classic TX, ID 0x123, 8 bytes <code>00..07</code>, channel 0:<br>
+<span class="hex">beef 001a 0101 8004 | 55 f1 00 00 00 00 00000123 08 0001020304050607 00 00 00 00000000 …</span></p>
+
+<h3 id="p-rx">3.11 RX records (EP 0x82 / EP 0x83)</h3>
+<p>Received frames arrive <strong>unframed</strong> on the channel's bulk-IN endpoint. Each record begins with the two header words of an NXP MCAN RX buffer element (R0, R1, both little-endian). One transfer can contain several records back to back, for example a 63-byte transfer holding three classic records. A record is classic or FD depending on R1.FDF. An idle poll returns <strong>8 zero bytes</strong>, which is not a record.</p>
+<figure>
+<svg class="dg" viewBox="0 0 880 396" role="img" aria-labelledby="f8t">
+<title id="f8t">RX record layouts and the R0/R1 header word bit fields</title>
+<text class="h" x="24" y="20">Classic record: 21 bytes (R1.FDF = 0)</text>
+<g class="xs"><text x="42" y="36">0</text><text x="194" y="36">4</text><text x="346" y="36">8</text><text x="650" y="36">16</text><text x="688" y="36">17</text><text class="e" x="838" y="36">21</text></g>
+<rect class="fhd" x="40" y="42" width="152" height="40"/><rect class="fhd" x="192" y="42" width="152" height="40"/>
+<rect class="fpl" x="344" y="42" width="304" height="40"/><rect class="fz" x="648" y="42" width="38" height="40"/>
+<rect class="fld" x="686" y="42" width="152" height="40"/>
+<text class="c h" x="116" y="59">R0</text><text class="c xs" x="116" y="75">LE32: ID, XTD, RTR, ESI</text>
+<text class="c h" x="268" y="59">R1</text><text class="c xs" x="268" y="75">LE32: DLC, BRS, FDF, FIDX</text>
+<text class="c h" x="496" y="59">data[8]</text><text class="c xs" x="496" y="75">first DLC bytes are valid</text>
+<text class="c ms" x="667" y="66">55</text>
+<text class="c h" x="762" y="59">timestamp</text><text class="c xs" x="762" y="75">LE32 × 100 µs</text>
+<text class="h" x="24" y="118">CAN FD record: 76 bytes (R1.FDF = 1)</text>
+<g class="xs"><text x="42" y="134">0</text><text x="194" y="134">4</text><text x="346" y="134">8</text><text x="688" y="134">72</text><text class="e" x="838" y="134">76</text></g>
+<rect class="fhd" x="40" y="140" width="152" height="40"/><rect class="fhd" x="192" y="140" width="152" height="40"/>
+<rect class="fpl" x="344" y="140" width="342" height="40"/><rect class="fld" x="686" y="140" width="152" height="40"/>
+<text class="c h" x="116" y="157">R0</text><text class="c xs" x="116" y="173">same as classic</text>
+<text class="c h" x="268" y="157">R1</text><text class="c xs" x="268" y="173">FDF = 1</text>
+<text class="c h" x="515" y="157">data[64]</text><text class="c xs" x="515" y="173">not to scale; no 0x55 marker</text>
+<text class="c h" x="762" y="157">timestamp</text><text class="c xs" x="762" y="173">LE32 × 100 µs</text>
+<text class="h" x="24" y="218">R0 (little-endian u32)</text>
+<g class="xs"><text class="c" x="37" y="234">31</text><text class="c" x="63" y="234">30</text><text class="c" x="89" y="234">29</text>
+<text x="104" y="234">28</text><text class="e" x="386" y="234">18</text><text x="390" y="234">17</text><text class="e" x="854" y="234">0</text></g>
+<rect class="fld" x="24" y="240" width="26" height="40"/><rect class="fld" x="50" y="240" width="26" height="40"/>
+<rect class="fld" x="76" y="240" width="26" height="40"/><rect class="fhd" x="102" y="240" width="286" height="40"/>
+<rect class="fld" x="388" y="240" width="468" height="40"/>
+<g style="font-size:9.5px"><text class="c" x="37" y="264">ESI</text><text class="c" x="63" y="264">XTD</text><text class="c" x="89" y="264">RTR</text></g>
+<text class="c s" x="245" y="265">ID[28:18] = standard 11-bit ID</text>
+<text class="c s" x="622" y="265">ID[17:0]; an extended ID uses all of [28:0]</text>
+<text class="h" x="24" y="318">R1 (little-endian u32)</text>
+<g class="xs"><text class="c" x="37" y="334">31</text><text x="52" y="334">30</text><text class="e" x="230" y="334">24</text>
+<text x="234" y="334">23</text><text class="e" x="282" y="334">22</text><text class="c" x="297" y="334">21</text><text class="c" x="323" y="334">20</text>
+<text x="338" y="334">19</text><text class="e" x="438" y="334">16</text><text x="442" y="334">15</text><text class="e" x="854" y="334">0</text></g>
+<rect class="fld" x="24" y="340" width="26" height="40"/><rect class="fld" x="50" y="340" width="182" height="40"/>
+<rect class="fz" x="232" y="340" width="52" height="40"/><rect class="fhd" x="284" y="340" width="26" height="40"/>
+<rect class="fhd" x="310" y="340" width="26" height="40"/><rect class="fhd" x="336" y="340" width="104" height="40"/>
+<rect class="fld" x="440" y="340" width="416" height="40"/>
+<g style="font-size:8.5px"><text class="c" x="37" y="364">ANMF</text></g>
+<g style="font-size:9.5px"><text class="c" x="297" y="364">FDF</text><text class="c" x="323" y="364">BRS</text></g>
+<text class="c s" x="141" y="365">FIDX (filter index)</text><text class="c xs" x="258" y="364">res.</text>
+<text class="c s" x="388" y="365">DLC</text><text class="c s" x="648" y="365">RXTS[15:0] (not used; see timestamp field)</text>
+</svg>
+<figcaption>Figure 8. RX record layouts (top) and the MCAN element header words (bottom).</figcaption>
+</figure>
+<ul>
+  <li><strong>ID:</strong> if XTD = 1, ID = R0[28:0]. Otherwise ID = R0[28:18]. For standard frames the low 18 bits of R0 are <em>not</em> zero in practice (for example R0 = <code>0x1F800FC0</code> for ID 0x7E0), so mask them off.</li>
+  <li><strong>Length:</strong> classic: min(DLC, 8). FD: the DLC maps to 0-8, 12, 16, 20, 24, 32, 48, 64. RTR frames carry no data.</li>
+  <li><strong>Timestamp:</strong> 32-bit LE at offset 17 (classic) or 72 (FD), in 100 µs ticks.</li>
+  <li><strong>Telling records apart:</strong> read R1, check FDF to pick 21 or 76 bytes, and for classic records check that byte 16 is <code>0x55</code>. An 8-byte all-zero transfer is an idle poll.</li>
+  <li><strong>No error frames or status records</strong> ever appear on these endpoints.</li>
+</ul>
+<p>Worked example: the test vector <span class="hex">48029004 000008ff fffefdfcfbfaf9f8 55 43d86300</span> decodes as R0 = <code>0x04900248</code>, giving std ID (R0 &gt;&gt; 18) &amp; 0x7FF = <strong>0x124</strong>. R1 = <code>0xFF080000</code>, giving DLC 8, FDF 0, FIDX 0x7F, ANMF 1. Data <code>FF FE FD FC FB FA F9 F8</code>, marker 0x55, timestamp <code>0x0063D843</code> × 100 µs. This is the peer's echo of TX 0x123 <code>00..07</code>: ID + 1, data XOR 0xFF.</p>
+
+<h3 id="p-status">3.12 0x800D GetStatus (diagnostic only)</h3>
+<p>Request <code>55 0D 29 dev ch 00 00 00</code>, reply 64 bytes. The meaning of the fields was inferred from their behaviour on hardware:</p>
+<div class="tablewrap"><table>
+<tr><th class="n">Bytes</th><th>Content</th></tr>
+<tr><td class="n">0</td><td>channel</td></tr>
+<tr><td class="n">2</td><td>"started"? flag</td></tr>
+<tr><td class="n">4-7</td><td>looks like MCAN <strong>ECR</strong>, LE: TEC [7:0], REC [14:8], RP [15], CEL [23:16]</td></tr>
+<tr><td class="n">8-11</td><td>looks like MCAN <strong>PSR</strong>, LE: LEC [2:0], ACT [4:3], EP [5], EW [6], BO [7], DLEC [10:8], TDCV [22:16]</td></tr>
+</table></div>
+<div class="warn"><p><strong>This is a stale snapshot, not a live register.</strong> TEC = 128 and CEL = 128 appeared during a no-ACK episode, but the values freeze, and TEC reads 0 while the adapter is still retransmitting. A request for channel 1 returned channel 0's counters. Use it only as a hint. <code>tools/status_probe.py</code> records it through bus-error scenarios.</p></div>
+
+<h3 id="p-danger">3.13 Unused and dangerous commands</h3>
+<div class="danger"><p><strong>Never send 0x8006 (firmware update).</strong> It presumably puts the adapter into its bootloader. Nothing in this project sends it.</p></div>
+<p>0x8007/0x8008 (get/set user serial number) and 0x800C (ClearBuffer, 8-byte payload) exist but are not used by this driver.</p>
+
+<!-- ============================================================ 5 -->
+<h2 id="quirks">4. Firmware behaviour &amp; limitations</h2>
+<div class="danger">
+<h4>SET_CONFIGURATION wedges the firmware</h4>
+<p>A second SET_CONFIGURATION sent to an already-configured device (for example pyusb's <code>dev.set_configuration()</code>) makes the firmware <strong>stop replying on EP1 IN until it is power-cycled</strong>. A USB reset does not help. wscanfd only sets a configuration if none is active. The kernel driver must never call <code>usb_reset_configuration()</code> or <code>usb_set_configuration()</code>.</p>
+</div>
+<div class="warn">
+<h4>Idle RX polls return 8 zero bytes instead of NAKing</h4>
+<p>When there is no data, the RX endpoints complete every bulk-IN request immediately with 8 zero bytes. A "read until timeout" drain loop therefore never ends, so bound drains by time (wscanfd uses 100 ms). A naive URB resubmit loop also spins at a very high completion rate. The kernel driver re-arms idle URBs through an hrtimer (<code>idle_poll_us</code>, default 1 ms, <a href="#k-internals">6.4</a>).</p>
+</div>
+<div class="danger" id="q-txflow">
+<h4>No TX flow control: excess frames are silently dropped</h4>
+<p>The adapter buffers only about <strong>10 TX frames</strong>. When the buffer is full it keeps completing USB writes and silently drops the excess. In the bench test, a kernel burst of 2000 frames written as fast as USB accepted them put only 50 on the wire. Pacing below the bus frame time loses frames; pacing at or above it loses none.</p>
+<p>On top of that, the firmware costs about <strong>300 µs + 2 µs per data byte</strong> per frame, whatever the bit rate: 0-16 bytes is fine at 300 µs, 32 bytes needs 350 µs, and 64 bytes needs 400 µs. That caps throughput at about <strong>3300 short frames/s even at 1 Mbit/s</strong>. Received frames use the same budget: with a 1:1 echo load, TX needed about twice the per-frame floor.</p>
+<p>The kernel driver handles this with a device-queue model (<a href="#k-txpacing">6.3</a>). The userspace driver applies the same model in <code>USBCANFD.send()</code>, which blocks while the estimated device queue is full (2000 frames at 1M/5M, mixed 64-byte FD+BRS and classic, 2000/2000 delivered). Its earlier unpaced 1000-frame test at 250k passed because each synchronous USB write took longer than a bus frame.</p>
+</div>
+<div class="warn">
+<h4>No TX confirmation; unacknowledged frames are retried, then silently dropped</h4>
+<p>0x8004 gets no reply, and no TX-complete or TX-failed message ever arrives later. If nobody ACKs, the adapter retransmits (about 2000 attempts, about 0.5 s, observed at 500k) and then silently drops the frame. The channel recovers by itself afterwards and does not need a host reset. "Sent" can therefore only ever mean "accepted by the adapter".</p>
+</div>
+<div class="warn">
+<h4>No error or bus-state information</h4>
+<p>No error records appear on the RX endpoints. 0x800D is a stale snapshot (<a href="#p-status">3.12</a>). Bus state can only be estimated.</p>
+</div>
+<div class="note">
+<h4>Smaller gotchas</h4>
+<ul>
+  <li><strong>CAN FD with BRS needs the same nominal sample point on all nodes.</strong> With the kernel's default (87.5 %) against an 80 % peer, BRS frames fail. Use <code>sample-point 0.8</code> (<a href="#k-samplepoint">details</a>).</li>
+  <li><strong>Termination flag is a no-op.</strong> InitCAN byte 30 bit 0x40 does nothing. Use the physical switches.</li>
+  <li><strong>Standard-ID records have junk in R0[17:0].</strong> Mask the ID.</li>
+  <li><strong>The 0x800D reply for channel 1 contained channel 0's counters.</strong></li>
+  <li><strong>One unexplained first-run failure.</strong> The very first TX run after the peer was flashed got nothing through. All later runs worked. Watch for "first StartCAN after power-up" problems.</li>
+  <li><strong>Permissions.</strong> The <code>/dev/bus/usb</code> node is root-only by default, so install the udev rule.</li>
+</ul>
+</div>
+
+<!-- ============================================================ 6 -->
+<h2 id="userspace">5. Userspace driver (<code>wscanfd/</code>)</h2>
+<p>A pure-Python driver built on pyusb/libusb. <code>protocol.py</code> holds the wire formats as pure functions, <code>device.py</code> does the USB I/O, <code>bridge.py</code> implements the SocketCAN bridge, and <code>__main__.py</code> is the CLI. The only runtime dependencies are <code>pyusb</code>.</p>
+
+<h3 id="u-install">5.1 Install</h3>
+<pre><code>python3 -m venv .venv &amp;&amp; .venv/bin/pip install pyusb pytest
+sudo install -m 644 udev/70-wscanfd.rules /etc/udev/rules.d/ &amp;&amp; sudo udevadm control --reload
+# then replug the adapter
+.venv/bin/python -m pytest tests          # protocol tests against known-good byte sequences</code></pre>
+<p>The udev rule (<code>udev/70-wscanfd.rules</code>) gives the <code>plugdev</code> group and the logged-in user access:</p>
+<pre><code>SUBSYSTEM=="usb", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="0053", MODE="0660", GROUP="plugdev", TAG+="uaccess"</code></pre>
+<p>If <code>wscanfd.ko</code> is bound to interface 0, the userspace driver detaches it on open. Use one driver or the other, not both.</p>
+
+<h3 id="u-cli">5.2 Command-line interface</h3>
+<pre><code>.venv/bin/python -m wscanfd info
+.venv/bin/python -m wscanfd dump -c both -b 250000            # candump-like
+.venv/bin/python -m wscanfd dump -c 0 -b 250000 --listen      # listen-only (no ACK)
+.venv/bin/python -m wscanfd send -c 0 -b 500000 123#11223344 18FEF100#0102030405060708 7DF#R
+.venv/bin/python -m wscanfd send -c 0 -b 500000 -d 2000000 123##1001122334455667788  # FD + BRS</code></pre>
+<div class="tablewrap"><table>
+<tr><th>Subcommand</th><th>Options</th><th>What it does</th></tr>
+<tr><td class="n">info</td><td></td><td>Opens the adapter and prints the parsed device info (stderr) and the raw info payload as hex</td></tr>
+<tr><td class="n">dump</td><td><code>-c 0|1|both</code>, <code>-t SECONDS</code></td><td>Prints received frames until Ctrl-C or the timeout</td></tr>
+<tr><td class="n">send</td><td><code>frames…</code>, <code>-n REPEAT</code> (1), <code>-g GAP</code> (0.01 s), <code>-w WAIT</code> (0.5 s)</td><td>Sends frames in cansend syntax, then listens for replies for WAIT seconds</td></tr>
+<tr><td class="n">bridge</td><td><code>-i IFACE</code> (vcan0)</td><td>Bridges one channel to a SocketCAN interface (<a href="#u-bridge">5.3</a>)</td></tr>
+<tr><td>common</td><td><code>-c CH</code> (0), <code>-b BITRATE</code> (250000), <code>-d DATA_BITRATE</code> (1000000), <code>--listen</code>; global <code>-v</code>/<code>-vv</code></td><td>Channel and bit timing. CAN FD is always enabled in InitCAN, so FD and classic frames can both be sent and received</td></tr>
+</table></div>
+<p><strong>Frame syntax</strong> (like cansend): <code>&lt;id&gt;#&lt;hex&gt;</code> classic; <code>&lt;id&gt;#R[len]</code> remote frame; <code>&lt;id&gt;##&lt;flags&gt;&lt;hex&gt;</code> CAN FD, where flags bit 0 = BRS. An ID with more than 3 hex digits is sent as a 29-bit extended ID. Dots in the data are ignored.</p>
+<p>Output looks like <code>RX (   6543.9300) can0 124  [8] FF FE FD FC FB FA F9 F8</code>. FD frames show <code>B[NN]</code> when BRS is set.</p>
+
+<h3 id="u-bridge">5.3 SocketCAN bridge (vcan)</h3>
+<pre><code>sudo modprobe vcan
+sudo ip link add dev vcan0 type vcan &amp;&amp; sudo ip link set vcan0 mtu 72 up   # mtu 72 = CAN FD capable
+.venv/bin/python -m wscanfd bridge -c 0 -b 250000 -d 2000000 -i vcan0
+candump vcan0           # in another terminal; cansend / python-can / Wireshark also work</code></pre>
+<p>Frames received on the bus appear on <code>vcan0</code>, and frames written to <code>vcan0</code> are transmitted on the bus. The bridge opens a <code>CAN_RAW</code> socket with <code>CAN_RAW_FD_FRAMES</code> and converts between <code>struct can_frame</code>/<code>canfd_frame</code> and the adapter formats. Error frames written to the socket are ignored.</p>
+<div class="note"><p>Bitrate and mode come from the bridge's command line, not from <code>ip link</code>, because a vcan interface has no bit timing. Configuring with <code>ip link</code> needs the kernel driver.</p></div>
+
+<h3 id="u-api">5.4 Python API</h3>
+<pre><code>from wscanfd.device import USBCANFD
+from wscanfd.protocol import Frame
+
+with USBCANFD() as dev:                       # open: claim, drain, open handshake, device info
+    print(dev.info)                           # serial=USBCANFD2024... hw=2.00 fw=2.12
+    dev.start_channel(0, 500_000, 2_000_000)  # InitCAN, clear filter, StartCAN, RX thread
+    dev.send(Frame(0x123, b"\x11\x22\x33\x44", channel=0))
+    dev.send(Frame(0x1ABCDEF0, bytes(20), extended=True, fd=True, brs=True, channel=0))
+    f = dev.recv(timeout=1.0)                 # Frame or None
+    if f:
+        print(f, f.timestamp_us)
+# leaving the block: ResetCAN on each channel, CloseDevice, release interface</code></pre>
+<div class="tablewrap"><table>
+<tr><th>Member</th><th>Description</th></tr>
+<tr><td class="n">USBCANFD(serial=None)</td><td>Constructor. Selecting by serial is not implemented yet: the first adapter found is used</td></tr>
+<tr><td class="n">open() / close()</td><td>Also usable as a context manager</td></tr>
+<tr><td class="n">start_channel(ch, bitrate, data_bitrate=1_000_000, *, fd=True, listen_only=False, termination=False, non_iso=False)</td><td>Configures and starts a channel and spawns an RX thread. Uses the reference timing word if the rate is in the table, otherwise computes one</td></tr>
+<tr><td class="n">stop_channel(ch)</td><td>Stops the RX thread and sends ResetCAN</td></tr>
+<tr><td class="n">send(frame)</td><td>Fire-and-forget 0x8004 on EP1 OUT. Not paced: space bursts at least one frame time apart (<a href="#q-txflow">quirks</a>)</td></tr>
+<tr><td class="n">recv(timeout=None)</td><td>Next frame from the shared RX queue (both channels; check <code>frame.channel</code>)</td></tr>
+<tr><td class="n">status_raw(ch)</td><td>Raw 64-byte 0x800D reply</td></tr>
+<tr><td class="n">info, rx_dropped</td><td>Parsed DeviceInfo; frames dropped because the 100 000-entry queue was full</td></tr>
+<tr><td class="n">Frame(can_id, data, extended, rtr, fd, brs, esi, channel, timestamp_us, filter_index, raw)</td><td>Dataclass used for TX and RX. <code>can_id</code> carries no flag bits</td></tr>
+</table></div>
+
+<!-- ============================================================ 7 -->
+<h2 id="kernel">6. Kernel driver (<code>kernel/</code>)</h2>
+<p><code>wscanfd.ko</code> is a native SocketCAN driver. Once it is loaded, the adapter's two channels appear as ordinary CAN netdevs, so <code>ip link</code>, <code>candump</code>, <code>cansend</code>, python-can and Wireshark work directly, without the bridge.</p>
+<div class="tablewrap"><table>
+<tr><th>Item</th><th>State</th></tr>
+<tr><td>Build</td><td><span class="badge b-ok">working</span> builds clean with <code>W=1</code> on 7.0.0-43</td></tr>
+<tr><td>Probe</td><td><span class="badge b-ok">working</span> open handshake + device info, creates <code>can0</code> (CAN1) and <code>can1</code> (CAN2)</td></tr>
+<tr><td>rmmod / insmod cycles</td><td><span class="badge b-ok">working</span> disconnect sends CloseDevice, and the firmware accepts a fresh open handshake afterwards</td></tr>
+<tr><td>Classic + CAN FD TX/RX</td><td><span class="badge b-ok">working</span> 82/82 round trips at 125k/1M, 250k/2M, 500k/2M, 500k/4M, 1M/5M (<a href="#t-results">7.2</a>)</td></tr>
+<tr><td>TX bursts</td><td><span class="badge b-ok">working</span> 2000-frame bursts with zero loss, thanks to the device-queue pacing (<a href="#k-txpacing">6.3</a>)</td></tr>
+<tr><td>Channels tested</td><td><span class="badge b-part">can1 only</span> CAN2 was wired to the test peer; can0 uses the same code path</td></tr>
+<tr><td>Unplug / replug while loaded</td><td><span class="badge b-part">not yet tested</span></td></tr>
+</table></div>
+
+<h3 id="k-usage">6.1 Build, install &amp; use</h3>
+<pre><code># build and load (needs the kernel headers and the can-dev module)
+make -C kernel
+sudo modprobe can-dev
+sudo insmod kernel/wscanfd.ko
+
+# or install with DKMS (kernel/dkms.conf: package wscanfd, version 0.1.0, AUTOINSTALL=yes)
+sudo cp -r kernel /usr/src/wscanfd-0.1.0
+sudo dkms install wscanfd/0.1.0
+sudo modprobe wscanfd
+
+# configure and bring up CAN2 (can1) for CAN FD
+sudo ip link set can1 type can bitrate 500000 sample-point 0.8 dbitrate 2000000 fd on
+sudo ip link set can1 up
+candump can1 &amp;
+cansend can1 123##1DEADBEEF          # FD frame with BRS
+ip -details -statistics link show can1</code></pre>
+<p>The driver logs <code>Waveshare USB-CAN-FD serial … hw 2.00 fw 2.12</code> at probe and one line per channel (<code>channel CAN1</code>/<code>CAN2</code>). <code>netdev->dev_port</code> is set to the channel index, so udev rules can name the interfaces stably. Listen-only mode is <code>listen-only on</code>, and classic-only operation is <code>fd off</code>.</p>
+
+<div class="okbox" id="k-recommended">
+<h4>Recommended settings</h4>
+<ul>
+  <li><strong>For CAN FD with BRS, use <code>sample-point 0.8</code></strong>, or more generally the same nominal sample point as every other node on the bus. The kernel's default (87.5 % at 250k/500k, 75 % at 1M) differs from the 80 % that most FD nodes use, and BRS frames then fail (see the box below). The default data-phase sample point is fine.</li>
+  <li><strong>Classic CAN:</strong> the kernel defaults work (18/18 at 250k).</li>
+  <li><strong><code>txqueuelen 1000</code> is fine for bursty senders.</strong> The driver paces frames into the adapter itself, so a long netdev queue just holds frames back and does not overflow the adapter: <code>sudo ip link set can1 txqueuelen 1000</code>.</li>
+  <li>Termination: set the physical switch. There is no software control.</li>
+</ul>
+</div>
+
+<div class="warn" id="k-samplepoint">
+<h4>Why BRS needs the same nominal sample point on every node</h4>
+<p>Each node switches to the data bit rate at <em>its own</em> nominal sample point in the BRS bit. With the kernel default of 87.5 % at 500k against the peer's 80 %, the two switch points are 7.5 % of a 2 µs bit apart, which is 150 ns, or about 30 % of a 2 Mbit/s data bit. The adapter's data-phase resynchronisation (data SJW about 50 ns) cannot absorb that. On the bench, BRS frames from the peer failed CRC at the adapter: only 25 of 82 round trips passed, the peer went error-passive, and its TX FIFO blocked. With <code>sample-point 0.8</code> on the adapter, 82/82 passed. CiA 601-3 recommends 80 % and identical sample points across all nodes.</p>
+</div>
+
+<h4>Module parameters</h4>
+<p>All are mode 0644 and can be changed at runtime, for example <code>echo 2 | sudo tee /sys/module/wscanfd/parameters/tx_dev_queue</code>, or set at load time with <code>insmod kernel/wscanfd.ko idle_poll_us=500</code>.</p>
+<div class="tablewrap"><table>
+<tr><th class="n">Parameter</th><th>Default</th><th>Meaning</th></tr>
+<tr><td class="n">tx_dev_queue</td><td>4</td><td>Maximum frames allowed "inside" the adapter at once (clamped to 1-8). The adapter holds about 10, so the default leaves room for bus time taken by other nodes</td></tr>
+<tr><td class="n">tx_min_frame_us</td><td>300</td><td>Minimum time budgeted per TX frame, plus 2 µs per data byte: the firmware's per-frame processing floor</td></tr>
+<tr><td class="n">idle_poll_us</td><td>1000</td><td>RX re-arm interval after an idle poll (clamped to 50-100000 µs). Lower values reduce latency after idle but cause more USB interrupts</td></tr>
+</table></div>
+
+<h3 id="k-design">6.2 Design</h3>
+<ul>
+  <li><strong>Binding:</strong> USB <code>04d8:0053</code>, interface 0, after checking that bulk endpoints 0x01, 0x81, 0x82 and 0x83 exist. It creates two netdevs: <code>can0</code> = board CAN1 (protocol channel 0, RX EP 0x82) and <code>can1</code> = board CAN2 (channel 1, RX EP 0x83).</li>
+  <li><strong>Probe:</strong> drain EP 0x81, send the open challenge (0x8001; the reply is not validated), read device info (0x8005) and log it. It <strong>never sends SET_CONFIGURATION</strong>. If the open command gets no reply, probe fails with a hint that the device may need a power cycle.</li>
+  <li><strong>Commands:</strong> synchronous <code>usb_bulk_msg()</code> on EP1 OUT, then on EP 0x81, under a mutex, with a 3 s timeout. Replies with a different cmd (late replies to an earlier, timed-out command) are skipped, up to 4 of them. On any error, EP1 IN is drained, and failures are logged with rate limiting.</li>
+  <li><strong><code>ndo_open</code>:</strong> InitCAN (0x8002) with timing words computed from the kernel's <code>can_bittiming</code> (BRP−1, SJW−1, prop_seg + phase_seg1 − 1, phase_seg2 − 1), clear the filter (0x800B), drain stale records from the RX endpoint, StartCAN (0x8003), then submit the RX URBs. In FD mode the dbit word comes from the data bittiming; otherwise the default <code>0x03030A02</code> is sent. Byte 30 = <code>0x80</code> for <code>fd-non-iso on</code>.</li>
+  <li><strong><code>ndo_stop</code>:</strong> stop the queue, cancel the timers, kill the RX and TX URBs, send ResetCAN (0x8009). <strong>Disconnect / rmmod</strong> unregisters the netdevs and sends CloseDevice (0x800A). <code>soft_unbind</code> keeps the device reachable for that last command.</li>
+  <li><strong>RX:</strong> 2 bulk-IN URBs per channel with 4096-byte buffers. A completion carrying records is parsed and resubmitted immediately. An idle poll (8 zero bytes) re-arms through an hrtimer after <code>idle_poll_us</code> (1 ms), which gives about 1940 USB interrupts/s per open idle channel. FD records are dropped while the interface is <code>fd off</code>, because the controller always runs FD-capable. <code>-EPIPE</code> schedules a work item that calls <code>usb_clear_halt()</code>. Other errors and failed resubmits retry after 10 ms, so RX never silently dies.</li>
+  <li><strong>TX:</strong> one async bulk URB per frame on EP1 OUT (cmd 0x8004, channel byte in the payload), with up to 16 echo slots. Only classic and FD skbs are accepted (CAN XL is dropped). FD lengths are rounded up to valid DLC lengths and zero-padded. Admission is limited by the device-queue model (<a href="#k-txpacing">6.3</a>).</li>
+  <li><strong>Echo (IFF_ECHO):</strong> released when the TX URB completes, which means "accepted by the adapter". No bus-level confirmation exists. <code>tx_bytes</code>/<code>tx_packets</code> are counted by the driver itself.</li>
+  <li><strong>Bus state:</strong> always <code>ERROR-ACTIVE</code>. There is no <code>do_set_mode</code>/restart support, because the firmware never reports bus-off or any live error state.</li>
+  <li><strong>ctrlmodes:</strong> <code>LISTENONLY</code>, <code>FD</code>, <code>FD_NON_ISO</code>. Termination is a physical switch.</li>
+</ul>
+
+<h3 id="k-txpacing">6.3 TX pacing: the device-queue model</h3>
+<p>The firmware has <strong>no TX flow control</strong> (<a href="#quirks">quirks</a>). It buffers only about 10 frames, keeps completing USB writes when it is full, and drops the excess silently. A naive driver that submits as fast as USB accepts lost 1950 of a 2000-frame burst. The driver therefore models the adapter's queue:</p>
+<ol>
+  <li>For each frame, estimate the time on the wire: <code>can_frame_bits()</code> with worst-case stuffing × the nominal bit time. For FD + BRS, the arbitration bits are counted at the nominal rate plus data bits × 1.25 at the data rate. Add 10 %, with a floor of <code>tx_min_frame_us</code> + 2 µs per data byte.</li>
+  <li>Keep a per-channel ring of estimated wire-finish times. Each new frame finishes at max(now, previous finish) + its frame time.</li>
+  <li><strong>Received frames count too.</strong> Each RX frame (on either channel) pushes the TX finish estimates of <em>both</em> channels back by <code>tx_min_frame_us</code> + 2 µs × payload, because the firmware spends that time handling it. Without this, TX under a 1:1 echo load needed about twice the per-frame floor and lost frames.</li>
+  <li>When <code>tx_dev_queue</code> frames are "inside" the adapter, stop the netdev queue and arm an absolute-time hrtimer for the oldest frame's finish time. When it fires, expire finished frames and wake the queue.</li>
+</ol>
+<p>With this, 500-frame bursts under a 1:1 echo load are lossless in both directions, and the adapter's RX itself was lossless under that load.</p>
+<p><strong>Limitation:</strong> if other nodes take a lot of bus time, the adapter drains slower than the model assumes. Allowing 4 of the about 10 buffer slots tolerates roughly a 2.5× slowdown. On a busy bus, lower <code>tx_dev_queue</code>.</p>
+
+<h3 id="k-internals">6.4 URB flow</h3>
+<figure>
+<svg class="dg" viewBox="0 0 880 680" role="img" aria-labelledby="f9t">
+<title id="f9t">Kernel driver internals: TX admission with echo slots and the device-queue timer, RX URBs with hrtimer idle pacing, synchronous control path</title>
+<defs><marker id="m9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3b4350"/></marker><marker id="m9s" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#3b4350"/></marker></defs>
+<text class="c h" x="115" y="22">netdev / SocketCAN</text><text class="c h" x="440" y="22">wscanfd.ko</text><text class="c h" x="765" y="22">USB-CAN-FD</text>
+<text class="xs h" x="24" y="46">TX PATH (per channel)</text>
+<rect class="krn" x="20" y="64" width="190" height="46" rx="6"/>
+<text class="c ms" x="115" y="84">ndo_start_xmit(skb)</text><text class="c xs" x="115" y="100">frame from a socket</text>
+<rect class="krn" x="250" y="56" width="380" height="84" rx="6"/>
+<text class="c h" x="440" y="76">TX admission</text>
+<text class="c s" x="440" y="94">take a free echo slot (16): can_put_echo_skb()</text>
+<text class="c s" x="440" y="110">add estimated wire-finish time to device-queue ring</text>
+<text class="c s" x="440" y="126">tx_dev_queue (4) in adapter → stop queue, arm timer</text>
+<rect class="dev" x="670" y="64" width="190" height="46" rx="6"/>
+<text class="c h" x="765" y="84">EP1 OUT (0x01)</text><text class="c xs" x="765" y="100">async bulk URB, cmd 0x8004</text>
+<line class="ln" x1="210" y1="87" x2="250" y2="87" marker-end="url(#m9)"/>
+<line class="ln" x1="630" y1="87" x2="670" y2="87" marker-end="url(#m9)"/>
+<text class="c xs" x="650" y="80">submit</text>
+<rect class="krn" x="250" y="160" width="380" height="60" rx="6"/>
+<text class="c h" x="440" y="180">TX URB completion</text>
+<text class="c s" x="440" y="198">can_get_echo_skb() → echo, tx stats; free the slot</text>
+<text class="c s" x="440" y="213">= accepted by the adapter, not ACKed on the bus</text>
+<path class="ln" d="M765,110 V190 H630" marker-end="url(#m9)"/>
+<text class="c xs" x="697" y="182">complete</text>
+<rect class="krn" x="20" y="167" width="190" height="46" rx="6"/>
+<text class="c" x="115" y="187">echo to local sockets</text><text class="c xs" x="115" y="203">IFF_ECHO</text>
+<line class="ln" x1="250" y1="190" x2="210" y2="190" marker-end="url(#m9)"/>
+<rect class="krn" x="250" y="240" width="380" height="56" rx="6"/>
+<text class="c h" x="440" y="260">device-queue drain timer (ABS hrtimer)</text>
+<text class="c s" x="440" y="280">oldest estimated frame finished → netif_wake_queue()</text>
+<rect class="krn" x="20" y="246" width="190" height="44" rx="6"/>
+<text class="c" x="115" y="266">netdev TX queue</text><text class="c xs" x="115" y="282">stopped / woken</text>
+<line class="ln" x1="250" y1="268" x2="210" y2="268" marker-end="url(#m9)"/>
+<text class="c xs" x="440" y="312">frame time = worst-case stuffed bits × bit time (FD+BRS: data bits × 1.25 at data rate), +10 %, floor tx_min_frame_us + 2 µs/byte</text>
+<text class="c xs" x="440" y="324" style="font-size:9.5px">each received frame (either channel) also delays both channels' estimates by tx_min_frame_us + 2 µs/byte</text>
+<line x1="20" y1="332" x2="860" y2="332" style="stroke:#d8dce2"/>
+<text class="xs h" x="24" y="346">RX PATH (per channel)</text>
+<rect class="dev" x="670" y="358" width="190" height="52" rx="6"/>
+<text class="c h" x="765" y="379">EP 0x82 / EP 0x83</text><text class="c xs" x="765" y="397">can0 / can1 RX</text>
+<rect class="krn" x="250" y="358" width="380" height="52" rx="6"/>
+<text class="c h" x="440" y="379">2 bulk-IN RX URBs per channel</text>
+<text class="c s" x="440" y="397">4096-byte buffers, in flight while the interface is up</text>
+<line class="ln" x1="670" y1="384" x2="630" y2="384" marker-end="url(#m9)"/>
+<line class="ln" x1="342" y1="410" x2="342" y2="448" marker-end="url(#m9)"/>
+<line class="ln" x1="537" y1="410" x2="537" y2="448" marker-end="url(#m9)"/>
+<text class="e xs" x="334" y="433">data</text><text class="xs" x="545" y="433">8 × 00 (idle poll)</text>
+<rect class="krn" x="250" y="448" width="185" height="80" rx="6"/>
+<text class="c h" x="342" y="468">records</text>
+<text class="c s" x="342" y="486">parse 21 B / 76 B records</text>
+<text class="c s" x="342" y="502">→ skb, netif_rx()</text>
+<text class="c s" x="342" y="518">resubmit immediately</text>
+<rect class="krn" x="445" y="448" width="185" height="80" rx="6"/>
+<text class="c h" x="537" y="468">idle</text>
+<text class="c s" x="537" y="486">hrtimer: idle_poll_us</text>
+<text class="c s" x="537" y="502">(default 1 ms) →</text>
+<text class="c s" x="537" y="518">resubmit URB</text>
+<path class="ln dash" d="M630,488 H650 V396 H630" marker-end="url(#m9)"/>
+<rect class="krn" x="20" y="465" width="190" height="46" rx="6"/>
+<text class="c" x="115" y="485">can0 / can1 RX</text><text class="c xs" x="115" y="501">skb to sockets</text>
+<line class="ln" x1="250" y1="488" x2="210" y2="488" marker-end="url(#m9)"/>
+<text class="c xs" x="440" y="546">EPIPE → work item runs usb_clear_halt();  other errors or failed resubmits → retry after 10 ms;  FD records dropped when fd off</text>
+<line x1="20" y1="558" x2="860" y2="558" style="stroke:#d8dce2"/>
+<text class="xs h" x="24" y="576">CONTROL PATH</text>
+<rect class="krn" x="20" y="600" width="190" height="52" rx="6"/>
+<text class="c" x="115" y="621">probe / open / stop</text><text class="c xs" x="115" y="638">ip link set canN up / down</text>
+<rect class="krn" x="250" y="586" width="380" height="80" rx="6"/>
+<text class="c h" x="440" y="606">command helper (mutex)</text>
+<text class="c s" x="440" y="623">usb_bulk_msg(EP1 OUT), then usb_bulk_msg(EP 0x81)</text>
+<text class="c s" x="440" y="639">skips up to 4 late replies; drains EP1 IN on error</text>
+<text class="c s" x="440" y="655">probe 8001, 8005 · open 8002, 800B, 8003 · stop 8009 · unbind 800A</text>
+<rect class="dev" x="670" y="600" width="190" height="52" rx="6"/>
+<text class="c h" x="765" y="621">EP1 OUT / EP1 IN</text><text class="c xs" x="765" y="638">framed request + reply</text>
+<line class="ln" x1="210" y1="626" x2="250" y2="626" marker-end="url(#m9)"/>
+<line class="ln" x1="630" y1="626" x2="670" y2="626" marker-start="url(#m9s)" marker-end="url(#m9)"/>
+</svg>
+<figcaption>Figure 9. Kernel driver internals. TX admission is limited by echo slots and by the modelled adapter queue, and an absolute-time hrtimer wakes the queue as frames drain. Idle RX completions are paced by an hrtimer. Commands are synchronous and serialised.</figcaption>
+</figure>
+
+<h3 id="k-timing">6.5 Bit-timing limits (<code>can_bittiming_const</code>)</h3>
+<div class="tablewrap"><table>
+<tr><th>Parameter</th><th>Nominal (NBTP)</th><th>Data (DBTP)</th></tr>
+<tr><td>clock</td><td>60 MHz</td><td>60 MHz</td></tr>
+<tr><td>tseg1 (prop_seg + phase_seg1)</td><td>2 … 256</td><td>1 … 32</td></tr>
+<tr><td>tseg2 (phase_seg2)</td><td>2 … 128</td><td>1 … 16</td></tr>
+<tr><td>sjw max</td><td>128</td><td>16</td></tr>
+<tr><td>brp</td><td>1 … 256 (8-bit field in the timing word)</td><td>1 … 32</td></tr>
+</table></div>
+<p>The computed values go straight into the abit/dbit words (<a href="#p-timing">3.8</a>). Unlike the userspace driver, which uses the reference timing values (80 %), the kernel picks the sample point with its own calculator unless you pass <code>sample-point</code> / <code>dsample-point</code>. For CAN FD, pass <code>sample-point 0.8</code> (<a href="#k-recommended">recommended settings</a>). You can also give explicit <code>tq</code>/<code>prop-seg</code>/<code>phase-seg1</code>/<code>phase-seg2</code>/<code>sjw</code> values.</p>
+
+<!-- ============================================================ 8 -->
+<h2 id="testing">7. Test rig &amp; results</h2>
+
+<h3 id="t-rig">7.1 Bench rig</h3>
+<p>The peer node is a <strong>LilyGo T-2CAN-FD</strong> (ESP32-S3) running the project's <code>t2can-echo/</code> firmware (ESP-IDF). It has two CAN ports:</p>
+<ul>
+  <li><strong>CAN A: MCP2518FD</strong> (CAN FD) on SPI (SCLK 12, MOSI 11, MISO 13, CS 10), driven by a minimal register-level polling driver (<code>mcp2518fd.c</code>). Used for all FD tests and the bitrate sweep.</li>
+  <li><strong>CAN B: ESP32 TWAI</strong> (classic only, TX GPIO 7 / RX GPIO 6), fixed at 250 kbit/s. Used for the first classic-CAN tests.</li>
+</ul>
+<p>Both ports echo every received frame with <strong>ID + 1 and data XOR 0xFF</strong>, keeping the length and the FD/BRS/IDE flags. CAN A can also send a 1 Hz heartbeat on ID 0x7E0. The PC drives the peer through its USB Serial/JTAG console. <code>tools/t2can_console.py</code> logs the console to a file and forwards commands written to a FIFO, so test scripts can change the peer's bitrate mid-run.</p>
+<figure>
+<svg class="dg" viewBox="0 0 880 380" role="img" aria-labelledby="f10t">
+<title id="f10t">Bench test rig: PC, USB-CAN-FD and LilyGo T-2CAN-FD</title>
+<defs><marker id="m10" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3b4350"/></marker><marker id="m10s" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#3b4350"/></marker></defs>
+<rect class="neu" x="20" y="40" width="200" height="320" rx="8"/>
+<text class="c h" x="120" y="64">Linux PC</text>
+<text class="c ms" x="120" y="90">python -m wscanfd</text>
+<text class="c ms" x="120" y="110">tools/fd_roundtrip.py</text>
+<text class="c ms" x="120" y="130">tools/status_probe.py</text>
+<text class="c ms" x="120" y="150">tools/t2can_console.py</text>
+<text class="c xs" x="120" y="166">(FIFO → serial, log file)</text>
+<rect class="dev" x="300" y="40" width="180" height="200" rx="8"/>
+<text class="c h" x="390" y="64">USB-CAN-FD</text>
+<text class="c xs" x="390" y="82">04d8:0053</text>
+<rect x="474" y="89" width="12" height="12" style="fill:#3d8b3d"/>
+<rect x="474" y="174" width="12" height="12" style="fill:#3d8b3d"/>
+<text class="e s" x="468" y="99">CAN1 (ch 0)</text>
+<text class="e s" x="468" y="184">CAN2 (ch 1)</text>
+<line class="ln" x1="220" y1="110" x2="300" y2="110" marker-start="url(#m10s)" marker-end="url(#m10)"/>
+<text class="c xs" x="260" y="102">USB</text>
+<rect class="bx" x="680" y="40" width="180" height="330" rx="8"/>
+<text class="c h" x="770" y="60">LilyGo T-2CAN-FD</text>
+<rect class="phy" x="692" y="72" width="156" height="56" rx="5"/>
+<text class="c h" x="770" y="94" style="font-size:12px">CAN B: ESP32 TWAI</text>
+<text class="c xs" x="770" y="112">classic only, 250 kbit/s</text>
+<rect class="phy" x="692" y="150" width="156" height="96" rx="5"/>
+<text class="c h" x="770" y="172" style="font-size:12px">CAN A: MCP2518FD</text>
+<text class="c xs" x="770" y="190">CAN FD, 40 MHz clock</text>
+<text class="c xs" x="770" y="206">rates set over serial</text>
+<rect class="krn" x="692" y="270" width="156" height="88" rx="5"/>
+<text class="c h" x="770" y="290" style="font-size:12px">ESP32-S3</text>
+<text class="c xs" x="770" y="307">t2can-echo firmware</text>
+<text class="c xs" x="770" y="323">echo: ID+1, data XOR FF</text>
+<text class="c xs" x="770" y="339">1 Hz 0x7E0 heartbeat (CAN A)</text>
+<line class="ln" x1="770" y1="246" x2="770" y2="270" marker-start="url(#m10s)" marker-end="url(#m10)"/>
+<text class="xs" x="778" y="262">SPI (DMA)</text>
+<!-- wiring -->
+<line class="lng dot" x1="486" y1="95" x2="692" y2="95"/>
+<text class="c xs" x="583" y="88">classic tests (early)</text>
+<path class="lng" d="M560,95 V190 H692"/>
+<circle cx="560" cy="95" r="3" style="fill:#2e7d32"/>
+<text class="c xs" x="620" y="183">FD tests + sweep</text>
+<path class="lng dash" d="M486,180 H510 V225 H692"/>
+<text class="c xs" x="595" y="241">channel-1 test</text>
+<line class="ln" x1="220" y1="314" x2="692" y2="314" marker-start="url(#m10s)" marker-end="url(#m10)"/>
+<text class="c xs" x="450" y="306">USB Serial/JTAG console: b/c/l/h/e/q/s/z commands, frame log</text>
+</svg>
+<figcaption>Figure 10. The bench rig. The wiring changed between test rounds: CAN1 ↔ CAN B for the first classic tests, CAN1 ↔ CAN A for FD and the bitrate sweep, and CAN2 ↔ CAN A for the channel-1 tests.</figcaption>
+</figure>
+<h4>Peer serial commands (newline-terminated)</h4>
+<div class="tablewrap"><table>
+<tr><th class="n">Command</th><th>Effect</th></tr>
+<tr><td class="n">b &lt;nominal&gt; &lt;data&gt;</td><td>Re-initialise CAN A bitrates, e.g. <code>b 500000 2000000</code></td></tr>
+<tr><td class="n">c &lt;hz&gt;</td><td>MCP2518FD SYSCLK used for the timing calculation (default 40000000)</td></tr>
+<tr><td class="n">l &lt;0|1&gt;</td><td>CAN A listen-only (stops ACKing: used to provoke no-ACK)</td></tr>
+<tr><td class="n">h &lt;0|1&gt;</td><td>CAN A heartbeat</td></tr>
+<tr><td class="n">e &lt;0|1&gt;</td><td>Echo on/off (both ports)</td></tr>
+<tr><td class="n">q &lt;0|1&gt;</td><td>Quiet: don't print frames (throughput tests)</td></tr>
+<tr><td class="n">s</td><td>Print status (counters, TEC/REC, MCP2518FD TREC/BDIAG1/INT, TWAI state)</td></tr>
+<tr><td class="n">z</td><td>Zero the counters</td></tr>
+</table></div>
+<p>Replies start with <code>OK</code> or <code>ERR</code>. Build with ESP-IDF (<code>sdkconfig.defaults</code> targets <code>esp32s3</code>, console on USB Serial/JTAG): <code>idf.py build flash</code> in <code>t2can-echo/</code>.</p>
+<div class="note"><h4>Peer-board findings worth knowing</h4>
+<ul>
+  <li><strong>The T-2CAN-FD's MCP2518FD runs from a 40 MHz clock</strong> (OSC = 0x460: no PLL, no divider). LilyGo's Longan_CANFD example defaults to <code>MCP2518FD_20MHz</code>, so its bit timing is wrong by a factor of 2.</li>
+  <li>ESP32-S3 SPI without DMA is limited to 64 bytes per transaction, so 64-byte FD frames need <code>SPI_DMA_CH_AUTO</code>.</li>
+  <li>500k/3M cannot be produced by the 40 MHz MCP2518FD, so that combination is <em>untested</em>, not failed.</li>
+</ul></div>
+
+<h3 id="t-results">7.2 Results</h3>
+<h4>CAN FD round trip and bitrate sweep</h4>
+<p><code>tools/fd_roundtrip.py [nominal] [data] [--ch N]</code> sends <strong>82 frames</strong> and checks that each comes back with ID + 1, inverted data and the same FD/BRS flags. The 82 frames are: for standard and for extended IDs, classic lengths 0-8 (9 frames) plus all 16 FD lengths with BRS off and on (32 frames). BRS frames only decode if the adapter really switches to the configured data rate, so passing them proves the data-phase timing words.</p>
+<div class="tablewrap"><table>
+<tr><th>Nominal / data</th><th>Channel</th><th>Result</th><th>Timing source</th></tr>
+<tr><td>50k / 1M</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>100k / 500k</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>125k / 1M</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>200k / 2M</td><td>0</td><td>82/82</td><td>nominal computed (<code>0x003BEE3B</code>)</td></tr>
+<tr><td>250k / 2M</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>250k / 2.5M</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>500k / 2M</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>500k / 4M</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>500k / 5M</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>800k / 4M</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>1M / 4M</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>1M / 5M</td><td>0</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>500k / 2M</td><td><strong>1</strong> (CAN2)</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>250k / 5M</td><td><strong>1</strong> (CAN2)</td><td>82/82</td><td>reference value</td></tr>
+<tr><td>500k / 3M</td><td>-</td><td>untested</td><td>the peer cannot generate it</td></tr>
+</table></div>
+<p>With only CAN2 wired, channel 0 saw nothing, so there is no cross-talk between channels.</p>
+<h4>Kernel driver (SocketCAN) results</h4>
+<p><code>tools/socketcan_roundtrip.py &lt;ifname&gt; [--classic-only]</code> runs the same 82 cases through the kernel interface. All tests ran on <code>can1</code> (CAN2), with the peer's CAN A at an 80 % sample point.</p>
+<div class="tablewrap"><table>
+<tr><th>Test</th><th>Settings</th><th>Result</th></tr>
+<tr><td>Round trip, 82 cases</td><td>125k/1M, 250k/2M, 500k/2M, 500k/4M, 1M/5M, all with <code>sample-point 0.8</code></td><td>82/82 each</td></tr>
+<tr><td>Round trip, classic only</td><td>250k, kernel default timing</td><td>18/18</td></tr>
+<tr><td>Round trip, kernel default sample point (87.5 %)</td><td>500k/2M FD</td><td>25/82: BRS frames fail CRC, the peer goes error-passive (<a href="#k-samplepoint">why</a>)</td></tr>
+<tr><td>2000-frame burst, default pacing</td><td>250k/2M, 500k/2M, 1M/5M; classic 8 B, FD 0 B BRS, FD 64 B BRS</td><td>zero loss</td></tr>
+<tr><td>2000-frame burst, no pacing (before the fix)</td><td>-</td><td>50 of 2000 on the wire</td></tr>
+<tr><td>500-frame burst under 1:1 echo load</td><td>peer echoes every frame</td><td>lossless in both directions; adapter RX lossless</td></tr>
+<tr><td>Sustained classic TX</td><td>250k, 8 B</td><td>1878 frames/s, about the bus limit</td></tr>
+<tr><td>Idle load</td><td>one channel up, bus idle, <code>idle_poll_us=1000</code></td><td>about 1940 USB interrupts/s (10/s with all channels down)</td></tr>
+</table></div>
+<h4>Other results</h4>
+<ul>
+  <li><strong>Userspace throughput:</strong> 1000 back-to-back classic frames from Python at 250k (peer on CAN B) all went onto the wire: the peer counted rx + rx_missed = 1000. All 841 echoes the peer managed to send were received. That is a saturated bus (about 2000 frames/s in total) with zero adapter-side loss.</li>
+  <li><strong>Listen-only:</strong> InitCAN mode 1 works: the adapter receives without ACKing.</li>
+  <li><strong>Unit tests:</strong> <code>tests/test_protocol.py</code> checks packing, checksums, InitCAN/TX payloads, reply parsing and RX parsing against known-good byte sequences, plus the reference timing values, the timing calculator, and the 0x800D/FD-TX layouts.</li>
+</ul>
+
+<h3 id="t-cangaroo">7.3 Third-party application: CANgaroo</h3>
+<p><a href="https://github.com/Schildkroet/CANgaroo">CANgaroo</a> v0.7.1 (AppImage) was used with the kernel driver through its SocketCAN backend. An AutoRun script (<code>tools/cangaroo/wscanfd_test.py</code>, workspace template <code>tools/cangaroo/wscanfd-test.cgw.in</code>, launcher <code>tools/cangaroo/run.sh</code>) ran two tests against the echo peer:</p>
+<div class="tablewrap"><table>
+<tr><th>Test</th><th>Result</th></tr>
+<tr><td>82-case CAN / CAN FD round trip</td><td><span class="badge b-ok">PASS</span> 82/82</td></tr>
+<tr><td>500-frame burst, 64-byte FD + BRS</td><td><span class="badge b-ok">PASS</span> 500/500</td></tr>
+</table></div>
+<div class="warn"><ul>
+  <li><strong>Tick "Configured by OS"</strong> for the interface in CANgaroo's setup dialog, and configure the interface with <code>ip link</code> (<a href="#k-recommended">recommended settings</a>). Otherwise CANgaroo reconfigures it with its own sample point, which it offers only as 50 / 62.5 / 75 / 87.5 %. That breaks FD + BRS against 80 % peers.</li>
+  <li>The Rx/Tx error counters show "-4" (unsupported) because the firmware provides no error counters.</li>
+</ul></div>
+<figure>
+<img src="cangaroo.png" width="1365" height="1044" alt="CANgaroo showing the adapter's traffic on can1 in its J1939 view, with the bus-status panel and a bus-load time-series graph">
+<figcaption>Figure 11. CANgaroo v0.7.1 decoding the adapter's traffic on <code>can1</code> in its J1939 view (TX test frames and RX echoes, 0-64-byte FD payloads), with the bus-status panel and the bus-load graph.</figcaption>
+</figure>
+
+<h3 id="t-errors">7.4 Error behaviour</h3>
+<p><code>tools/status_probe.py</code> provokes error conditions through the peer (it stops ACKing, or runs the peer at the wrong bitrate) while polling 0x800D. Findings:</p>
+<ul>
+  <li>No error or status records appear on the RX endpoints, and TX never gets a completion or failure reply.</li>
+  <li>Unacknowledged frames are retried (about 2000 attempts, about 0.5 s, at 500k) and then silently dropped. Afterwards the channel recovers by itself.</li>
+  <li>0x800D showed TEC = 128 and CEL = 128 during a no-ACK episode, but the values froze, and TEC read 0 while the adapter was still retransmitting. It is a stale snapshot.</li>
+</ul>
+<p>For drivers this means: deliver the TX echo when the adapter accepts the frame (or disable IFF_ECHO), report ERROR_ACTIVE, use 0x800D only as a hint, and pace TX (<a href="#q-txflow">quirks</a>). The kernel driver does all of this.</p>
+
+<!-- ============================================================ 9 -->
+<h2 id="appendix">8. Appendix: repository map</h2>
+
+
+<div class="tablewrap"><table>
+<tr><th>Path</th><th>Contents</th></tr>
+<tr><td class="n">README.md</td><td>Usage and status summary</td></tr>
+<tr><td class="n">docs/</td><td>This documentation (<code>index.html</code>, <code>pcb.jpg</code>)</td></tr>
+<tr><td class="n">wscanfd/protocol.py</td><td>Wire formats: framing, checksum, open handshake, device info, timing words, command payloads, TX layouts, RX parser</td></tr>
+<tr><td class="n">wscanfd/device.py</td><td>USB layer (pyusb): open/info, commands, channels, RX threads</td></tr>
+<tr><td class="n">wscanfd/bridge.py</td><td>Bridge between the adapter and a SocketCAN (vcan) interface</td></tr>
+<tr><td class="n">wscanfd/__main__.py</td><td>CLI: <code>info</code>, <code>dump</code>, <code>send</code>, <code>bridge</code></td></tr>
+<tr><td class="n">tests/test_protocol.py</td><td>Byte-exact protocol tests</td></tr>
+<tr><td class="n">udev/70-wscanfd.rules</td><td>Device permissions</td></tr>
+<tr><td class="n">tools/fd_roundtrip.py</td><td>82-case CAN/CAN FD round-trip test against the echo peer (userspace driver)</td></tr>
+<tr><td class="n">tools/cangaroo/</td><td>CANgaroo AutoRun test: <code>wscanfd_test.py</code>, workspace template <code>wscanfd-test.cgw.in</code>, launcher <code>run.sh</code></td></tr>
+<tr><td class="n">tools/socketcan_roundtrip.py</td><td>The same round-trip test through a SocketCAN interface (kernel driver)</td></tr>
+<tr><td class="n">tools/status_probe.py</td><td>Records 0x800D through no-ACK and wrong-bitrate scenarios</td></tr>
+<tr><td class="n">tools/t2can_console.py</td><td>Peer console logger + FIFO command forwarder</td></tr>
+<tr><td class="n">t2can-echo/</td><td>ESP-IDF echo firmware for the LilyGo T-2CAN-FD (<code>main/echo.c</code>, <code>main/mcp2518fd.c</code>)</td></tr>
+<tr><td class="n">kernel/</td><td>SocketCAN kernel module: <code>wscanfd.c</code>, <code>Makefile</code>, <code>dkms.conf</code></td></tr>
+<tr><td class="n">usb-can-fd pcb.png</td><td>Original PCB photo</td></tr>
+</table></div>
+
+<p style="color:var(--muted);font-size:14px;margin-top:40px">Not affiliated with Waveshare, NXP or Microchip. Product names belong to their owners.</p>
+</main>
+</div>
+</body>
+</html>

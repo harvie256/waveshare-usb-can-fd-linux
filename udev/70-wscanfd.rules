@@ -1,0 +1,2 @@
+# Waveshare USB-CAN-FD (non-B), NXP LPC54616 firmware using Microchip's VID
+SUBSYSTEM=="usb", ATTRS{idVendor}=="04d8", ATTRS{idProduct}=="0053", MODE="0660", GROUP="plugdev", TAG+="uaccess"

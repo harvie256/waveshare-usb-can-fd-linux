@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!-- CANgaroo workspace: wscanfd kernel driver on can1 (pre-configured: 500k/80% + 2M FD).
+     configure="0": CANgaroo uses the interface as set up with ip link. -->
+<cangaroo-workspace>
+ <tabs>
+  <tab title="wscanfd test" type="TraceWindow" mode="unified">
+   <scriptwindow file="@SCRIPT@" autorun="1"/>
+  </tab>
+ </tabs>
+ <setup>
+  <network name="wscanfd">
+   <interfaces>
+    <interface bus-type="can" type="can" driver="SocketCAN" name="can1" configure="0" enabled="1"
+               bitrate="500000" sample-point="800" can-fd="1" bitrate-fd="2000000" sample-point-fd="800"
+               listen-only="0" one-shot="0" triple-sampling="0" auto-restart="0" auto-restart-time="100"/>
+   </interfaces>
+   <databases/>
+  </network>
+ </setup>
+</cangaroo-workspace>

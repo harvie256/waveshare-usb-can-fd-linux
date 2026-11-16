@@ -1,0 +1,22 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# ESP-IDF build output
+t2can-echo/build/
+t2can-echo/sdkconfig
+t2can-echo/sdkconfig.old
+t2can-echo/managed_components/
+
+
+# Kernel module build output
+kernel/*.o
+kernel/*.ko
+kernel/*.mod
+kernel/*.mod.c
+kernel/.*.cmd
+kernel/Module.symvers
+kernel/modules.order
+kernel/.tmp_versions/
