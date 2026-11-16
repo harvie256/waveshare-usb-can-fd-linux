@@ -646,7 +646,7 @@ static unsigned int ws_devq_limit(void)
 }
 
 /* Estimated time on the wire, worst-case stuffing, +10%. */
-static u64 ws_frame_ns(const struct ws_chan *ch, const struct sk_buff *skb)
+static u64 ws_frame_ns(const struct ws_chan *ch, struct sk_buff *skb)
 {
 	const struct canfd_frame *cfd = (const struct canfd_frame *)skb->data;
 	bool fd = can_is_canfd_skb(skb), eff = cfd->can_id & CAN_EFF_FLAG;
@@ -671,6 +671,18 @@ static void ws_devq_expire(struct ws_chan *ch, ktime_t now)
 	}
 }
 
+/*
+ * tx_lock held: room for another USB transfer? All TX for both channels (and
+ * commands) share one OUT endpoint, and the firmware stops reading it while it
+ * retries an unacknowledged frame (~0.5 s each). Keeping few transfers in
+ * flight per channel bounds how long one channel with no listener can hold up
+ * the other. Transfers normally complete in about 1 ms, so this costs nothing.
+ */
+static bool ws_tx_inflight_ok(const struct ws_chan *ch)
+{
+	return hweight_long(ch->tx_used) < ws_devq_limit();
+}
+
 /* tx_lock held: wake the queue if there is room, else arm the drain timer. */
 static void ws_tx_update_queue(struct ws_chan *ch)
 {
@@ -683,7 +695,7 @@ static void ws_tx_update_queue(struct ws_chan *ch)
 		hrtimer_start(&ch->tx_timer, ch->devq_finish[ch->devq_head], HRTIMER_MODE_ABS_SOFT);
 		return;
 	}
-	if (find_first_zero_bit(&ch->tx_used, WS_TX_SLOTS) < WS_TX_SLOTS)
+	if (ws_tx_inflight_ok(ch))
 		netif_wake_queue(netdev);
 }
 
@@ -842,7 +854,7 @@ static netdev_tx_t ws_start_xmit(struct sk_buff *skb, struct net_device *netdev)
 	if (ch->devq_count >= ws_devq_limit()) {
 		netif_stop_queue(netdev);
 		hrtimer_start(&ch->tx_timer, ch->devq_finish[ch->devq_head], HRTIMER_MODE_ABS_SOFT);
-	} else if (find_first_zero_bit(&ch->tx_used, WS_TX_SLOTS) >= WS_TX_SLOTS) {
+	} else if (!ws_tx_inflight_ok(ch)) {
 		netif_stop_queue(netdev);
 	}
 	spin_unlock_irqrestore(&ch->tx_lock, flags);

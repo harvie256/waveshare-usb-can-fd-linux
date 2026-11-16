@@ -165,7 +165,7 @@ ol.legend li { break-inside: avoid; margin-bottom: 4px; }
 <tr><td>Termination</td><td><span class="badge b-part">hardware only</span></td><td>Physical switch on the case. The protocol's software flag does nothing on this board</td></tr>
 <tr><td>Error / bus state</td><td><span class="badge b-part">partly understood</span></td><td>No error records on the RX endpoints, no TX confirmation; 0x800D returns a stale ECR/PSR snapshot (<a href="#p-status">3.12</a>)</td></tr>
 <tr><td>Multiple adapters</td><td><span class="badge b-part">kernel only</span></td><td>The kernel driver probes each adapter separately (untested with two); the userspace driver uses the first one found</td></tr>
-<tr><td>Native SocketCAN kernel module</td><td><span class="badge b-ok">working</span></td><td>Builds clean (W=1, 7.0.0-43), probes, rmmod/insmod cycles clean, 82/82 FD round trips, 2000-frame bursts with zero loss. Tested on can1 (CAN2) only; unplug/replug not yet tested (<a href="#kernel">section 6</a>)</td></tr>
+<tr><td>Native SocketCAN kernel module</td><td><span class="badge b-ok">working</span></td><td>Builds clean (W=1, 7.0.0-43), probes, rmmod/insmod cycles clean, 82/82 FD round trips, 2000-frame bursts with zero loss. Tested on both channels; DKMS install and hot-unplug tested (<a href="#kernel">section 6</a>)</td></tr>
 <tr><td>TX flow control</td><td><span class="badge b-part">driver-side only</span></td><td>The firmware drops frames beyond its ~10-frame buffer without telling the host. The kernel driver paces TX; the userspace driver does not (<a href="#quirks">quirks</a>)</td></tr>
 </table></div>
 
@@ -868,8 +868,9 @@ with USBCANFD() as dev:                       # open: claim, drain, open handsha
 <tr><td>rmmod / insmod cycles</td><td><span class="badge b-ok">working</span> disconnect sends CloseDevice, and the firmware accepts a fresh open handshake afterwards</td></tr>
 <tr><td>Classic + CAN FD TX/RX</td><td><span class="badge b-ok">working</span> 82/82 round trips at 125k/1M, 250k/2M, 500k/2M, 500k/4M, 1M/5M (<a href="#t-results">7.2</a>)</td></tr>
 <tr><td>TX bursts</td><td><span class="badge b-ok">working</span> 2000-frame bursts with zero loss, thanks to the device-queue pacing (<a href="#k-txpacing">6.3</a>)</td></tr>
-<tr><td>Channels tested</td><td><span class="badge b-part">can1 only</span> CAN2 was wired to the test peer; can0 uses the same code path</td></tr>
-<tr><td>Unplug / replug while loaded</td><td><span class="badge b-part">not yet tested</span></td></tr>
+<tr><td>Channels tested</td><td><span class="badge b-ok">both</span> round trips on both channels with the peer moved between them</td></tr>
+<tr><td>Unplug / replug while loaded</td><td><span class="badge b-ok">working</span> unplugged with both interfaces up and transmitting: senders get <code>ENXIO</code>, interfaces are removed, no kernel warnings; replug re-probes cleanly</td></tr>
+<tr><td>DKMS</td><td><span class="badge b-ok">working</span> <code>dkms install</code>, auto-load on plug-in via the USB alias, remove/reinstall (DKMS 3.2.2, Ubuntu 26.04)</td></tr>
 </table></div>
 
 <h3 id="k-usage">6.1 Build, install &amp; use</h3>
@@ -878,10 +879,11 @@ make -C kernel
 sudo modprobe can-dev
 sudo insmod kernel/wscanfd.ko
 
-# or install with DKMS (kernel/dkms.conf: package wscanfd, version 0.1.0, AUTOINSTALL=yes)
-sudo cp -r kernel /usr/src/wscanfd-0.1.0
+# or install with DKMS (kernel/dkms.conf: package wscanfd, version 0.1.0, AUTOINSTALL=yes);
+# copy only the sources, not build output. Loads automatically on plug-in from then on.
+sudo mkdir -p /usr/src/wscanfd-0.1.0
+sudo cp kernel/wscanfd.c kernel/Makefile kernel/dkms.conf /usr/src/wscanfd-0.1.0/
 sudo dkms install wscanfd/0.1.0
-sudo modprobe wscanfd
 
 # configure and bring up CAN2 (can1) for CAN FD
 sudo ip link set can1 type can bitrate 500000 sample-point 0.8 dbitrate 2000000 fd on
@@ -936,9 +938,11 @@ ip -details -statistics link show can1</code></pre>
   <li>Keep a per-channel ring of estimated wire-finish times. Each new frame finishes at max(now, previous finish) + its frame time.</li>
   <li><strong>Received frames count too.</strong> Each RX frame (on either channel) pushes the TX finish estimates of <em>both</em> channels back by <code>tx_min_frame_us</code> + 2 µs × payload, because the firmware spends that time handling it. Without this, TX under a 1:1 echo load needed about twice the per-frame floor and lost frames.</li>
   <li>When <code>tx_dev_queue</code> frames are "inside" the adapter, stop the netdev queue and arm an absolute-time hrtimer for the oldest frame's finish time. When it fires, expire finished frames and wake the queue.</li>
+  <li>Also keep at most <code>tx_dev_queue</code> USB transfers in flight per channel. Transfers normally complete in about 1 ms, so this costs no throughput. It limits the backlog that queues behind EP1 OUT when the firmware stops reading it (see below).</li>
 </ol>
 <p>With this, 500-frame bursts under a 1:1 echo load are lossless in both directions, and the adapter's RX itself was lossless under that load.</p>
 <p><strong>Limitation:</strong> if other nodes take a lot of bus time, the adapter drains slower than the model assumes. Allowing 4 of the about 10 buffer slots tolerates roughly a 2.5× slowdown. On a busy bus, lower <code>tx_dev_queue</code>.</p>
+<p><strong>Limitation:</strong> Unacknowledged frames stall <em>both</em> channels: all TX shares EP1 OUT, and the firmware stops reading it while it retries an unacknowledged frame. With can0 sending into a bus with no other node, can1 dropped from about 195 to about 5 frames/s, and after a 3 s burst on can0, can1 waited about 12 s for its next frame (18 s before the driver capped in-flight transfers). Don't transmit on a channel that has no other node on its bus.</p>
 
 <h3 id="k-internals">6.4 URB flow</h3>
 <figure>
@@ -1172,6 +1176,7 @@ ip -details -statistics link show can1</code></pre>
 <ul>
   <li>No error or status records appear on the RX endpoints, and TX never gets a completion or failure reply.</li>
   <li>Unacknowledged frames are retried (about 2000 attempts, about 0.5 s, at 500k) and then silently dropped. Afterwards the channel recovers by itself.</li>
+  <li>Unacknowledged frames stall <em>both</em> channels: all TX shares EP1 OUT, and the firmware stops reading it while it retries an unacknowledged frame. With can0 sending into a bus with no other node, can1 dropped from about 195 to about 5 frames/s, and after a 3 s burst on can0, can1 waited about 12 s for its next frame (18 s before the driver capped in-flight transfers). Don't transmit on a channel that has no other node on its bus.</li>
   <li>0x800D showed TEC = 128 and CEL = 128 during a no-ACK episode, but the values froze, and TEC read 0 while the adapter was still retransmitting. It is a stale snapshot.</li>
 </ul>
 <p>For drivers this means: deliver the TX echo when the adapter accepts the frame (or disable IFF_ECHO), report ERROR_ACTIVE, use 0x800D only as a hint, and pace TX (<a href="#q-txflow">quirks</a>). The kernel driver does all of this.</p>

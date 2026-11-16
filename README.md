@@ -44,14 +44,20 @@ cansend can1 123##1DEADBEEF
 
 ### Install with DKMS (survives kernel updates)
 
-*(The `dkms.conf` is included but DKMS installation has not been tested yet.)*
-
 ```sh
 sudo apt install dkms
-sudo cp -r kernel /usr/src/wscanfd-0.1.0
+sudo mkdir -p /usr/src/wscanfd-0.1.0
+sudo cp kernel/wscanfd.c kernel/Makefile kernel/dkms.conf /usr/src/wscanfd-0.1.0/
 sudo dkms install wscanfd/0.1.0
-sudo modprobe wscanfd          # loads automatically when the adapter is plugged in from now on
 ```
+
+The module then loads automatically whenever the adapter is plugged in, and DKMS rebuilds it for each new kernel.
+Check with `dkms status`. To update, `sudo dkms remove wscanfd/0.1.0 --all`, copy the new files and install
+again. To uninstall, run `sudo dkms remove wscanfd/0.1.0 --all` and `sudo rm -r /usr/src/wscanfd-0.1.0`.
+
+With Secure Boot on, DKMS signs the module with a local Machine Owner Key. The first time, `dkms` (or
+`update-secureboot-policy --enroll-key`) asks for a password. Reboot and enrol the key in the blue MOK manager
+screen, or the kernel will refuse to load the module.
 
 ### Recommended settings
 
@@ -59,6 +65,8 @@ sudo modprobe wscanfd          # loads automatically when the adapter is plugged
   `sample-point 0.8`** (CiA 601-3). The kernel's default (87.5 % at 250k/500k) against 80 % peers makes FD+BRS
   frames from those peers fail. Classic CAN is unaffected.
 - Bursty senders are fine. The driver paces transmission itself (see below), so a large `txqueuelen` is safe.
+- **Don't transmit on a channel with no other node on its bus.** See "Unacknowledged frames stall both channels"
+  below.
 
 ### Module parameters
 
@@ -66,7 +74,7 @@ sudo modprobe wscanfd          # loads automatically when the adapter is plugged
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `tx_dev_queue` | 4 | Frames the driver lets queue inside the adapter (1-8) |
+| `tx_dev_queue` | 4 | Frames the driver lets queue inside the adapter, and USB transfers in flight, per channel (1-8) |
 | `tx_min_frame_us` | 300 | Firmware per-frame cost floor, µs; the driver adds 2 µs per data byte |
 | `idle_poll_us` | 1000 | RX poll interval while the bus is idle. Lower means less latency and more USB interrupts |
 
@@ -81,6 +89,12 @@ The stock firmware has a few limitations that the driver works around:
   2000-frame back-to-back bursts and under a 1:1 echo load. TX tops out at about 3300 short frames/s.
 - **No TX confirmation.** An echoed frame (IFF_ECHO) means the adapter accepted it. Frames nobody ACKs are
   retried for about 0.5 s and then dropped.
+- **Unacknowledged frames stall both channels.** All transmissions for both channels share one USB endpoint, and
+  the firmware stops reading it while it retries an unacknowledged frame. A channel sending into a bus with
+  nobody to ACK (unconnected, wrong bit rate, peer off) slows the *other* channel to a few frames per second.
+  After 3 s of such traffic, the other channel still waited about 12 s for its next frame. The driver keeps at
+  most `tx_dev_queue` USB transfers in flight per channel to limit this (18 s without that limit), but it
+  can't reach frames already buffered in the firmware.
 - **No bus-error or bus-state reporting**, so interfaces always report ERROR-ACTIVE and error counters are
   unsupported.
 - **RX endpoints never NAK.** Idle polls are paced with an hrtimer, which costs about 2 USB interrupts per ms per
@@ -117,11 +131,13 @@ serial commands to change the bit rate.
 | Sustained classic TX at 250 kbit/s | 1878 frames/s, about the bus limit |
 | [CANgaroo](https://github.com/Schildkroet/CANgaroo) v0.7.1 via SocketCAN ([`tools/cangaroo/`](tools/cangaroo)) | 82/82 round-trip, 500/500 FD64+BRS burst |
 | Listen-only mode | working |
+| DKMS install, auto-load on plug-in, rebuild/reinstall (Ubuntu 26.04, kernel 7.0) | working |
+| Unplugging with both interfaces up and transmitting | clean: senders get `ENXIO`, interfaces removed, no kernel warnings |
 
 Test tools: [`tools/socketcan_roundtrip.py`](tools/socketcan_roundtrip.py) (kernel driver),
 [`tools/fd_roundtrip.py`](tools/fd_roundtrip.py) (userspace driver), `tests/` (protocol unit tests, `pytest`).
 
-Not tested yet: unplugging the adapter while an interface is up, or several adapters at once.
+Not tested yet: several adapters at once.
 
 ## Documentation
 
